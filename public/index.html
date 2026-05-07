@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电子送达文书批量下载助手</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary-color: #007bff;
+    --primary-hover-color: #0056b3;
+    --background-color: #f8f9fa;
+    --container-bg: #ffffff;
+    --text-color: #343a40;
+    --muted-color: #6c757d;
+    --border-color: #dee2e6;
+    --error-bg: #f8d7da;
+    --error-border: #f5c6cb;
+    --error-text: #721c24;
+    --info-bg: #d1ecf1;
+    --info-border: #bee5eb;
+    --info-text: #0c5460;
+    --success-color: #28a745;
+    --success-hover-color: #1e7e34;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans SC', -apple-system, 'PingFang SC', sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  .main-container {
+    background-color: var(--container-bg);
+    padding: 30px 40px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+    width: 100%;
+    max-width: 750px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 30px;
+  }
+  header h1 {
+    color: var(--text-color);
+    margin-bottom: 8px;
+    font-size: 26px;
+    font-weight: 700;
+  }
+  header p {
+    color: var(--muted-color);
+    font-size: 15px;
+  }
+
+  label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+  }
+
+  textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    font-size: 14px;
+    min-height: 110px;
+    box-sizing: border-box;
+    margin-bottom: 15px;
+    resize: vertical;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+  }
+
+  .btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    width: 100%;
+    transition: background-color 0.2s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-family: inherit;
+  }
+  .btn:hover {
+    background-color: var(--primary-hover-color);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  }
+  .btn:disabled {
+    background-color: #adb5bd;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .btn svg { margin-right: 8px; width: 16px; height: 16px; flex-shrink: 0; }
+
+  .btn-success {
+    background-color: var(--success-color);
+    padding: 10px 18px;
+    font-size: 13px;
+    width: auto;
+  }
+  .btn-success:hover {
+    background-color: var(--success-hover-color);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .toolbar label { margin-bottom: 0; }
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .doc-list-container {
+    border-top: 1px solid #e9ecef;
+    padding-top: 16px;
+  }
+  .doc-list { min-height: 50px; }
+  .doc-list .placeholder {
+    margin: 10px 0;
+    padding: 8px 0;
+    font-size: 14px;
+    text-align: center;
+    color: var(--muted-color);
+  }
+
+  .doc-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 4px;
+    border-bottom: 1px solid #e9ecef;
+    transition: background-color 0.15s;
+    font-size: 15px;
+    gap: 10px;
+  }
+  .doc-item:last-child { border-bottom: none; }
+  .doc-item:hover { background-color: #f1f3f5; }
+  .doc-item input[type="checkbox"] { flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; margin-right: 2px; }
+
+  .doc-icon { flex-shrink: 0; width: 20px; height: 20px; margin-right: 6px; }
+
+  .file-ext {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+  }
+  .ext-pdf { background: #e53935; }
+  .ext-doc, .ext-docx { background: #1a73e8; }
+  .ext-xls, .ext-xlsx { background: #34a853; }
+  .ext-ppt, .ext-pptx { background: #f57c00; }
+  .ext-zip, .ext-rar { background: #7b1fa2; }
+  .ext-img { background: #00796b; }
+  .ext-default { background: #607d8b; }
+
+  .doc-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--primary-color);
+    font-size: 14px;
+    text-decoration: none;
+    min-width: 0;
+  }
+  .doc-name:hover { text-decoration: underline; }
+
+  .btn-download-single {
+    background-color: var(--success-color);
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background-color 0.2s;
+    font-family: inherit;
+  }
+  .btn-download-single:hover { background-color: var(--success-hover-color); }
+  .btn-download-single svg { margin: 0; width: 12px; height: 12px; }
+
+  .expiry-warning {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 5px;
+    padding: 10px 15px;
+    margin-bottom: 14px;
+    font-size: 14px;
+    color: #856404;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .expiry-warning svg { flex-shrink: 0; }
+
+  .status-message {
+    text-align: center;
+    padding: 10px 15px;
+    border-radius: 5px;
+    margin-top: 15px;
+    font-size: 14px;
+    border: 1px solid transparent;
+    display: none;
+  }
+  .status-message.status-error {
+    background-color: var(--error-bg);
+    border-color: var(--error-border);
+    color: var(--error-text);
+  }
+  .status-message.status-info {
+    background-color: var(--info-bg);
+    border-color: var(--info-border);
+    color: var(--info-text);
+  }
+  .status-message.status-success {
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+  }
+
+  .spinner {
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top: 3px solid #fff;
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .disclaimer {
+    font-size: 12px;
+    color: var(--muted-color);
+    margin-top: 20px;
+    text-align: center;
+    padding: 15px;
+    background-color: #e9ecef;
+    border-radius: 5px;
+    max-width: 750px;
+    width: 100%;
+  }
+  .copyright { font-size: 13px; font-weight: 500; color: var(--text-color); margin-bottom: 6px; }
+  .disclaimer strong { color: var(--text-color); }
+
+  .section-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .section-label label { margin-bottom: 0; }
+
+  /* 移动端适配 */
+  @media (max-width: 600px) {
+    body { padding: 20px 12px; }
+    .main-container { padding: 20px 16px; }
+    header h1 { font-size: 22px; }
+    .doc-item { font-size: 13px; gap: 8px; }
+    .doc-name { font-size: 13px; }
+    .btn-download-single { padding: 5px 8px; font-size: 11px; }
+    .toolbar { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .toolbar-right { width: 100%; }
+    .toolbar-right .btn-success { flex: 1; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>电子送达文书批量下载助手</h1>
+  <p>粘贴法院发送的包含文书链接的短信内容，快速解析并准备下载。</p>
+</header>
+
+<div class="main-container">
+  <label for="smsInput">送达短信内容</label>
+  <textarea id="smsInput" placeholder="请在此粘贴完整的法院送达短信..."></textarea>
+  <button class="btn" id="parseBtn" onclick="doParse()">
+    
+    <span id="parseBtnText">解析文书列表</span>
+  </button>
+</div>
+
+<div class="main-container" id="resultCard" style="display:none">
+  <div class="section-label">
+    <label>可下载文书</label>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn btn-success" id="selectAllBtn" style="display:none" onclick="toggleSelectAll()">
+        <span id="selectAllText">全选</span>
+      </button>
+      <button class="btn btn-success" id="downloadAllBtn" style="display:none" onclick="downloadAll()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C11.4477 2 11 2.44772 11 3V13.5858L8.70711 11.2929C8.31658 10.9024 7.68342 10.9024 7.29289 11.2929C6.90237 11.6834 6.90237 12.3166 7.29289 12.7071L11.2929 16.7071C11.6834 17.0976 12.3166 17.0976 12.7071 16.7071L16.7071 12.7071C17.0976 12.3166 17.0976 11.6834 16.7071 11.2929C16.3166 10.9024 15.6834 10.9024 15.2929 11.2929L13 13.5858V3C13 2.44772 12.5523 2 12 2ZM4 16C4 15.4477 4.44772 15 5 15H19C19.5523 15 20 15.4477 20 16C20 16.5523 19.5523 17 19 17H5V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V17H5C4.44772 17 4 16.5523 4 16Z"/></svg>
+        <span id="downloadAllText">打包下载全部 (ZIP)</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="expiryWarning" class="expiry-warning" style="display:none">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+    <span id="expiryText"></span>
+  </div>
+
+  <div id="docList" class="doc-list">
+    <p class="placeholder" id="placeholder">请先粘贴短信内容并点击解析按钮。</p>
+  </div>
+
+  <div id="statusMsg" class="status-message"></div>
+</div>
+
+<div class="disclaimer"><div class="copyright">Copyright &copy; MCTMilk（微信同号） 法米粒信息科技（苏州）有限公司 @2026</div><hr style="margin:15px 0;border:none;border-top:1px solid #ccc;">
+  <strong>免责声明:</strong>
+  本工具为非官方辅助工具，旨在方便用户批量处理电子送达文书，请自行承担使用风险。
+  本工具通过解析您提供的链接与法院官方系统进行交互，请确保您的使用行为符合相关法律法规及官方平台的用户协议。
+  开发者不对因使用本工具可能导致的任何数据丢失，信息泄露、法律纠纷或任何直接、间接损失负责。
+  请务必核对下载文件的准确性和完整性。本工具依赖于法院官方平台的接口结构，如遇平台更新可能导致功能失效。
+  本工具使用官方API转发下载数据，不对文件做任何缓存。
+</div>
+
+<script>
+const API = '';
+
+let currentDocs = [];
+let selectAllOn = false;
+let hasValidParams = false;
+
+// 从短信内容中解析 URL 参数
+function parseParamsFromSMS(sms) {
+  const match = sms.match(/https?:\/\/zxfw\.court\.gov\.cn[^\s]*/);
+  if (!match) return null;
+  try {
+    const url = new URL(match[0]);
+    let params;
+    // hash 中的参数（#/path?qdbh=...）
+    if (url.hash && url.hash.includes('?')) {
+      params = new URLSearchParams(url.hash.split('?')[1]);
+    } else {
+      params = url.searchParams;
+    }
+    const sdbh = params.get('sdbh');
+    const qdbh = params.get('qdbh');
+    const sdsin = params.get('sdsin');
+    if (sdbh && qdbh && sdsin) return { sdbh, qdbh, sdsin };
+  } catch(e) {}
+  return null;
+}
+
+async function doParse() {
+  const sms = document.getElementById('smsInput').value.trim();
+  if (!sms) { showStatus('请先粘贴送达短信内容。', 'error'); return; }
+
+  const params = parseParamsFromSMS(sms);
+  if (!params) { showStatus('未能从短信中提取到有效的法院文书链接。', 'error'); return; }
+
+  // 设置按钮加载状态
+  const btn = document.getElementById('parseBtn');
+  const btnText = document.getElementById('parseBtnText');
+  btn.disabled = true;
+  const spinner = document.createElement('div');
+  spinner.className = 'spinner';
+  btn.insertBefore(spinner, btnText);
+  btnText.textContent = '正在解析...';
+  document.getElementById('docList').innerHTML = '<p class="placeholder">正在解析，请稍候...</p>';
+  document.getElementById('resultCard').style.display = 'none';
+  hideStatus();
+
+  try {
+    const resp = await fetch(API + '/api/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: sms }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) throw new Error(data.error || '解析失败');
+
+    // 过期
+    if (data.expired) {
+      document.getElementById('docList').innerHTML = '<p class="placeholder">送达短信已过下载期限，请联系法院重新获取。</p>';
+      document.getElementById('resultCard').style.display = 'block';
+      return;
+    }
+
+    hasValidParams = true;
+    currentDocs = data.files || [];
+
+    renderDocList(currentDocs, data.expiresAt);
+
+  } catch(e) {
+    showStatus('解析失败：' + e.message, 'error');
+    document.getElementById('docList').innerHTML = '<p class="placeholder">解析失败，请稍后再试。</p>';
+    document.getElementById('resultCard').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = '解析文书列表';
+    const s = btn.querySelector('.spinner');
+    if (s) btn.removeChild(s);
+  }
+}
+
+function renderDocList(docs, expiresAt) {
+  const card = document.getElementById('resultCard');
+  const list = document.getElementById('docList');
+  const placeholder = document.getElementById('placeholder');
+  const selectAllBtn = document.getElementById('selectAllBtn');
+  const downloadAllBtn = document.getElementById('downloadAllBtn');
+  const expiryWarn = document.getElementById('expiryWarning');
+
+  card.style.display = 'block';
+
+  if (!docs || docs.length === 0) {
+    list.innerHTML = '<p class="placeholder">未找到可下载文书，请确认链接是否正确。</p>';
+    selectAllBtn.style.display = 'none';
+    downloadAllBtn.style.display = 'none';
+    expiryWarn.style.display = 'none';
+    return;
+  }
+
+  // 过期警告
+  if (expiresAt) {
+    document.getElementById('expiryText').textContent = '下载链接有效期至：' + expiresAt + '（请在此之前完成下载）';
+    expiryWarn.style.display = 'flex';
+  } else {
+    expiryWarn.style.display = 'none';
+  }
+
+  // 显示全选和打包下载按钮
+  selectAllBtn.style.display = 'flex';
+  downloadAllBtn.style.display = 'flex';
+  selectAllOn = false;
+  updateSelectAllBtn();
+
+  // 渲染列表
+  list.innerHTML = '';
+  docs.forEach((doc, i) => {
+    const item = document.createElement('div');
+    item.className = 'doc-item';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.idx = i;
+    cb.onchange = updateDownloadAllText;
+
+    const extMap = {
+      'pdf': 'ext-pdf', 'doc': 'ext-doc', 'docx': 'ext-docx',
+      'xls': 'ext-xls', 'xlsx': 'ext-xlsx', 'ppt': 'ext-ppt', 'pptx': 'ext-pptx',
+      'zip': 'ext-zip', 'rar': 'ext-zip',
+      'jpg': 'ext-img', 'jpeg': 'ext-img', 'png': 'ext-img', 'gif': 'ext-img',
+    };
+    const extClass = extMap[doc.ext] || 'ext-default';
+
+    item.innerHTML = `
+      <div class="file-ext ${extClass}">${(doc.ext || '?').toUpperCase()}</div>
+      <a class="doc-name" href="${escHtml(doc.href)}" target="_blank" title="${escHtml(doc.name)}">${escHtml(doc.name)}</a>
+      <button class="btn-download-single" onclick="downloadSingle(${i})">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C11.4477 2 11 2.44772 11 3V13.5858L8.70711 11.2929C8.31658 10.9024 7.68342 10.9024 7.29289 11.2929C6.90237 11.6834 6.90237 12.3166 7.29289 12.7071L11.2929 16.7071C11.6834 17.0976 12.3166 17.0976 12.7071 16.7071L16.7071 12.7071C17.0976 12.3166 17.0976 11.6834 16.7071 11.2929C16.3166 10.9024 15.6834 10.9024 15.2929 11.2929L13 13.5858V3C13 2.44772 12.5523 2 12 2ZM4 16C4 15.4477 4.44772 15 5 15H19C19.5523 15 20 15.4477 20 16C20 16.5523 19.5523 17 19 17H5V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V17H5C4.44772 17 4 16.5523 4 16Z"/></svg>
+        下载
+      </button>
+    `;
+    item.insertBefore(cb, item.firstChild);
+    list.appendChild(item);
+  });
+
+  updateDownloadAllText();
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function toggleSelectAll() {
+  selectAllOn = !selectAllOn;
+  document.querySelectorAll('.doc-item input[type="checkbox"]').forEach(cb => cb.checked = selectAllOn);
+  updateSelectAllBtn();
+  updateDownloadAllText();
+}
+
+function updateSelectAllBtn() {
+  document.getElementById('selectAllText').textContent = selectAllOn ? '取消全选' : '全选';
+  document.getElementById('selectAllBtn').style.background = selectAllOn ? '#6c757d' : '';
+}
+
+function updateDownloadAllText() {
+  const checked = document.querySelectorAll('.doc-item input[type="checkbox"]:checked').length;
+  const text = document.getElementById('downloadAllText');
+  if (checked > 0) {
+    text.textContent = `下载选中 (${checked}) (ZIP)`;
+  } else {
+    text.textContent = '打包下载全部 (ZIP)';
+  }
+}
+
+async function downloadSingle(idx) {
+  const doc = currentDocs[idx];
+  const btn = event.target.closest('button');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span style="font-size:11px">下载中...</span>';
+
+  try {
+    const resp = await fetch('/api/download?url=' + encodeURIComponent(doc.href) + '&filename=' + encodeURIComponent(doc.name));
+    if (!resp.ok) {
+      const d = await resp.json();
+      throw new Error(d.error);
+    }
+    const data = await resp.json();
+    const bin = base64ToBuffer(data.buffer);
+    downloadBlob(bin, data.filename);
+    showStatus('文件已开始下载。', 'success');
+  } catch(e) {
+    showStatus('下载失败：' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+async function downloadAll() {
+  const checked = document.querySelectorAll('.doc-item input[type="checkbox"]:checked');
+  const btn = document.getElementById('downloadAllBtn');
+  const btnText = document.getElementById('downloadAllText');
+
+  let indices;
+  if (checked.length > 0) {
+    indices = Array.from(checked).map(cb => parseInt(cb.dataset.idx));
+  } else {
+    indices = currentDocs.map((_, i) => i);
+  }
+
+  if (indices.length === 0) {
+    showStatus('没有可下载的文件。', 'error');
+    return;
+  }
+
+  const files = indices.map(i => ({ url: currentDocs[i].href, name: currentDocs[i].name }));
+
+  btn.disabled = true;
+  btnText.textContent = '正在打包...';
+  showStatus(`正在打包 ${files.length} 个文件，请稍候...`, 'info');
+
+  try {
+    const resp = await fetch('/api/batch-download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '打包失败');
+
+    const bin = base64ToBuffer(data.zip);
+    const ts = new Date().toISOString().slice(0, 10);
+    downloadBlob(bin, `法院文书_${ts}.zip`);
+
+    if (data.failed > 0) {
+      showStatus(`打包完成，其中 ${data.failed} 个文件下载失败。`, 'error');
+    } else {
+      showStatus(`${data.downloaded} 个文件打包完成，开始下载。`, 'success');
+    }
+  } catch(e) {
+    showStatus('打包下载失败：' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    updateDownloadAllText();
+  }
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status-message status-' + type;
+  el.style.display = 'block';
+}
+
+function hideStatus() {
+  const el = document.getElementById('statusMsg');
+  el.style.display = 'none';
+}
+
+function base64ToBuffer(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function downloadBlob(buffer, filename) {
+  const blob = new Blob([buffer]);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+</script>
+</body>
+</html>
