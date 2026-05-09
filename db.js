@@ -157,8 +157,8 @@ function getDb() {
         try { db.run(sql); } catch {}
       }
       // 迁移后必须保存，否则重启后列又丢失
-      const data = db.export();
-      fs.writeFileSync(DB_PATH, Buffer.from(data));
+      const savedData = db.export();
+      fs.writeFileSync(DB_PATH, Buffer.from(savedData));
       return db;
     })();
   }
