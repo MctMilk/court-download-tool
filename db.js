@@ -156,6 +156,37 @@ function getDb() {
       for (const sql of migrations) {
         try { db.run(sql); } catch {}
       }
+
+      // v3.0: 微信支付相关字段迁移
+      const wxMigrations = [
+        "ALTER TABLE payment_records ADD COLUMN recharge_type TEXT",
+        "ALTER TABLE payment_records ADD COLUMN recharge_months INTEGER DEFAULT 0",
+        "ALTER TABLE payment_records ADD COLUMN wx_transaction_id TEXT",
+        "ALTER TABLE payment_records ADD COLUMN wx_prepay_id TEXT",
+        "ALTER TABLE payment_records ADD COLUMN wx_code_url TEXT",
+        "ALTER TABLE payment_records ADD COLUMN paid_at TEXT",
+        "ALTER TABLE payment_records ADD COLUMN notify_ip TEXT",
+      ];
+      for (const sql of wxMigrations) {
+        try { db.run(sql); } catch {}
+      }
+
+      // v3.0: sms_log 表（短信发送记录，防刷）
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS sms_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          phone TEXT NOT NULL,
+          ip TEXT,
+          code TEXT NOT NULL,
+          sent_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          used INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now', '+8 hours'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_sms_phone ON sms_log(phone);
+        CREATE INDEX IF NOT EXISTS idx_sms_ip ON sms_log(ip);
+      `);
+
       // 迁移后必须保存，否则重启后列又丢失
       const savedData = db.export();
       fs.writeFileSync(DB_PATH, Buffer.from(savedData));

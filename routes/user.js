@@ -91,34 +91,24 @@ router.post('/change-password', authenticate, async (req, res) => {
   res.json({ message: '密码修改成功' });
 });
 
-// 升级付费版 — 查询充值金额（引导用户联系客服）
-router.post('/upgrade', authenticate, async (req, res) => {
-  const { type, months } = req.body;
-  if (!['monthly', 'yearly'].includes(type)) return res.status(400).json({ error: '无效的充值类型' });
-  if (type === 'monthly' && (!months || months < 1 || months > 12)) return res.status(400).json({ error: '按月充值请选择1~12个月' });
-  if (type === 'yearly' && (!months || months < 1 || months > 3)) return res.status(400).json({ error: '按年充值请选择1~3年' });
-
-  const result = calcRecharge(type, months);
-  res.json({
-    price: result.price,
-    months: result.months,
-    type,
-    message: '请联系客服微信（备注"法院文书充值"）完成付款，付款后联系客服开通',
-  });
-});
-
-// 客服确认充值（实际写入）
+// 客服确认充值（实际写入，保留以兼容旧渠道）
 router.post('/recharge/confirm', authenticate, async (req, res) => {
   const { type, months, adminKey } = req.body;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
 
   const { price, months: addMonths } = calcRecharge(type, months);
-    const user = await getAsync('SELECT * FROM users WHERE id = ?', [req.user.userId]);
+  const user = await getAsync('SELECT * FROM users WHERE id = ?', [req.user.userId]);
   if (!user) return res.status(404).json({ error: '用户不存在' });
+  if (user.lifetime === 1) return res.status(403).json({ error: '该用户为终身会员，无需充值' });
 
   const newExpires = calcExpiresAt(user.paid_expires_at, addMonths);
   await runAsync("UPDATE users SET balance = balance + ?, recharged_at = datetime('now', '+8 hours'), paid_expires_at = ? WHERE id = ?", [price, newExpires, user.id]);
+  // 记录余额流水（必须）
+  await runAsync(
+    `INSERT INTO balance_log (user_id, amount, type, description, created_at) VALUES (?, ?, '充值', ?, datetime('now', '+8 hours'))`,
+    [user.id, price, `客服手动充值-${type === 'monthly' ? '月付' : '年付'}套餐(${addMonths}个月)`]
+  );
 
   res.json({ message: `充值成功，到期时间：${newExpires}` });
 });

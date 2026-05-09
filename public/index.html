@@ -684,38 +684,64 @@
     <button class="modal-close" onclick="closeModal('upgradeModal')">&times;</button>
     <h2 style="text-align:center;margin-bottom:16px">升级付费版</h2>
 
-    <div class="upgrade-feature free">
-      <span class="icon">📄</span>
-      <span>单文件下载 — <strong>免费</strong>（无需登录）</span>
-    </div>
-    <div class="upgrade-feature paid">
-      <span class="icon">📦</span>
-      <span>批量打包下载（ZIP） — <strong>付费功能</strong></span>
-    </div>
+    <!-- State 0: 选择套餐 -->
+    <div id="payState0">
+      <div class="upgrade-feature free">
+        <span class="icon">📄</span>
+        <span>单文件下载 — <strong>免费</strong>（无需登录）</span>
+      </div>
+      <div class="upgrade-feature paid">
+        <span class="icon">📦</span>
+        <span>批量打包下载（ZIP） — <strong>付费功能</strong></span>
+      </div>
 
-    <h3 style="margin:16px 0 8px;font-size:14px;color:#374151">选择套餐</h3>
-
-    <div id="upgradeOptions" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-      <label class="recharge-option">
-        <input type="radio" name="rechargeType" value="monthly:1" checked> 按月充值 — <strong>5元/月</strong>
-      </label>
-      <label class="recharge-option">
-        <input type="radio" name="rechargeType" value="yearly:1"> 按年充值（1年） — <strong>50元/年</strong>
-      </label>
-      <label class="recharge-option">
-        <input type="radio" name="rechargeType" value="yearly:2"> 按年充值（2年） — <strong>80元</strong>（8折）
-      </label>
-      <label class="recharge-option">
-        <input type="radio" name="rechargeType" value="yearly:3"> 按年充值（3年） — <strong>105元</strong>（7折）
-      </label>
-    </div>
-
-    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px;margin-bottom:16px;font-size:13px;color:#856404">
-      <strong>请完成付款后，联系客服开通</strong><br>
-      微信：<strong>MCTMilk</strong>（备注"法院文书充值"）
+      <h3 style="margin:16px 0 8px;font-size:14px;color:#374151">选择套餐</h3>
+      <div id="upgradeOptions" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+        <label class="recharge-option">
+          <input type="radio" name="rechargeType" value="monthly:1" checked> 按月充值 — <strong>5元/月</strong>
+        </label>
+        <label class="recharge-option">
+          <input type="radio" name="rechargeType" value="yearly:1"> 按年充值（1年） — <strong>50元/年</strong>
+        </label>
+        <label class="recharge-option">
+          <input type="radio" name="rechargeType" value="yearly:2"> 按年充值（2年） — <strong>80元</strong>（8折）
+        </label>
+        <label class="recharge-option">
+          <input type="radio" name="rechargeType" value="yearly:3"> 按年充值（3年） — <strong>105元</strong>（7折）
+        </label>
+      </div>
+      <button class="btn btn-success" style="width:100%" id="payBtn" onclick="initiatePayment()">立即支付</button>
     </div>
 
-    <button class="btn btn-success" style="width:100%" onclick="closeModal('upgradeModal')">我知道了</button>
+    <!-- State 1: 加载中 -->
+    <div id="payState1" style="display:none;text-align:center;padding:24px 0">
+      <div style="font-size:48px;margin-bottom:12px">⏳</div>
+      <p style="color:#666;font-size:14px">正在生成支付二维码…</p>
+    </div>
+
+    <!-- State 2: 二维码展示 -->
+    <div id="payState2" style="display:none;text-align:center">
+      <div id="qrcodeContainer" style="display:flex;justify-content:center;margin:16px 0"></div>
+      <p style="font-size:15px;margin-bottom:8px">请使用 <strong>微信</strong> 扫码支付</p>
+      <p id="payAmountDisplay" style="font-size:24px;font-weight:bold;color:#1a73e8;margin-bottom:12px"></p>
+      <p style="font-size:13px;color:#888">支付成功后页面将自动更新</p>
+      <p id="payPollingStatus" style="font-size:12px;color:#aaa;margin-top:8px">等待支付中…</p>
+      <button class="btn" style="margin-top:16px;width:100%;background:#f5f5f5;color:#666;border:1px solid #ddd" onclick="cancelPayment()">取消支付</button>
+    </div>
+
+    <!-- State 3: 支付成功 -->
+    <div id="payState3" style="display:none;text-align:center;padding:24px 0">
+      <div style="font-size:64px;margin-bottom:12px">✅</div>
+      <p style="font-size:18px;font-weight:bold;color:#16a34a;margin-bottom:8px">支付成功！</p>
+      <p style="font-size:14px;color:#666">您的付费版已开通，享尽用法务检索服务</p>
+    </div>
+
+    <!-- State 4: 超时/错误 -->
+    <div id="payState4" style="display:none;text-align:center;padding:24px 0">
+      <div style="font-size:48px;margin-bottom:12px">❌</div>
+      <p id="payErrorMsg" style="font-size:15px;color:#dc2626;margin-bottom:16px"></p>
+      <button class="btn" style="width:100%;background:#f5f5f5;color:#666;border:1px solid #ddd" onclick="resetPaymentModal()">重新发起支付</button>
+    </div>
   </div>
 </div>
 
@@ -1146,7 +1172,130 @@ async function doChangePwd() {
 
 // ─── Upgrade Modal ────────────────────────────────────────────────────
 function showUpgradeModal() {
+  resetPaymentModal();
   openModal('upgradeModal');
+}
+
+let _paymentTradeNo = '';
+let _paymentPollTimer = null;
+let _paymentPollCount = 0;
+
+// 发起微信支付
+async function initiatePayment() {
+  const radios = document.getElementsByName('rechargeType');
+  let selectedType = '', selectedMonths = 1;
+  for (const r of radios) {
+    if (r.checked) {
+      const [t, m] = r.value.split(':');
+      selectedType = t; selectedMonths = parseInt(m);
+      break;
+    }
+  }
+  if (!selectedType) { alert('请选择套餐'); return; }
+
+  document.getElementById('payState0').style.display = 'none';
+  document.getElementById('payState1').style.display = '';
+  document.getElementById('payState2').style.display = 'none';
+  document.getElementById('payState3').style.display = 'none';
+  document.getElementById('payState4').style.display = 'none';
+
+  try {
+    const resp = await fetch('/wenshu/api/payment/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+      body: JSON.stringify({ type: selectedType, months: selectedMonths }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      if (resp.status === 400 && data.error.includes('终身')) {
+        showPayError('您已是终身会员，无需续费');
+      } else {
+        showPayError(data.error || '创建订单失败');
+      }
+      return;
+    }
+
+    _paymentTradeNo = data.tradeNo;
+    document.getElementById('payAmountDisplay').textContent = '¥' + data.amount + ' 元';
+
+    // 渲染二维码
+    document.getElementById('qrcodeContainer').innerHTML = '';
+    new QRCode(document.getElementById('qrcodeContainer'), {
+      text: data.codeUrl,
+      width: 200, height: 200,
+    });
+
+    document.getElementById('payState1').style.display = 'none';
+    document.getElementById('payState2').style.display = '';
+    document.getElementById('payPollingStatus').textContent = '等待支付中…';
+
+    // 开始轮询
+    pollPaymentStatus();
+  } catch(e) {
+    showPayError('网络异常，请稍后重试');
+  }
+}
+
+function showPaySuccess() {
+  document.getElementById('payState2').style.display = 'none';
+  document.getElementById('payState3').style.display = '';
+  // 重新获取用户信息刷新状态
+  fetch('' + API_BASE + '/api/user/me', { headers: authHeaders() })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(user => { currentUser = user; updateUserBar(); updateDownloadBtnState(); })
+    .catch(() => {});
+  setTimeout(() => { closeModal('upgradeModal'); resetPaymentModal(); }, 2500);
+}
+
+function showPayError(msg) {
+  document.getElementById('payState0').style.display = 'none';
+  document.getElementById('payState1').style.display = 'none';
+  document.getElementById('payState2').style.display = 'none';
+  document.getElementById('payState3').style.display = 'none';
+  document.getElementById('payState4').style.display = '';
+  document.getElementById('payErrorMsg').textContent = msg;
+}
+
+function cancelPayment() {
+  clearInterval(_paymentPollTimer);
+  if (_paymentTradeNo) {
+    fetch('/wenshu/api/payment/close/' + _paymentTradeNo, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+    }).catch(() => {});
+  }
+  resetPaymentModal();
+  closeModal('upgradeModal');
+}
+
+function resetPaymentModal() {
+  clearInterval(_paymentPollTimer);
+  _paymentTradeNo = '';
+  _paymentPollCount = 0;
+  document.getElementById('qrcodeContainer').innerHTML = '';
+  document.getElementById('payState0').style.display = '';
+  document.getElementById('payState1').style.display = 'none';
+  document.getElementById('payState2').style.display = 'none';
+  document.getElementById('payState3').style.display = 'none';
+  document.getElementById('payState4').style.display = 'none';
+}
+
+// 启动轮询（每3秒）
+function pollPaymentStatus() {
+  if (!_paymentTradeNo) return;
+  _paymentPollTimer = setInterval(async () => {
+    try {
+      const resp = await fetch('/wenshu/api/payment/order/' + _paymentTradeNo, {
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+      });
+      const data = await resp.json();
+      if (data.status === 'paid') { clearInterval(_paymentPollTimer); showPaySuccess(); return; }
+      if (data.status === 'closed') { clearInterval(_paymentPollTimer); showPayError('订单已超时'); return; }
+      document.getElementById('payPollingStatus').textContent = '等待支付中… (' + Math.floor(_paymentPollCount * 3 / 60) + 'm)';
+    } catch {}
+    _paymentPollCount++;
+    if (_paymentPollCount >= 600) { clearInterval(_paymentPollTimer); showPayError('订单超时，请重新发起'); }
+  }, 3000);
 }
 
 // ─── 邀请 Modal ───────────────────────────────────────────────────────
@@ -1692,5 +1841,6 @@ function downloadBlob(buffer, filename) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </body>
 </html>
