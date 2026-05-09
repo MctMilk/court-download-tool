@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>电子送达文书批量下载助手</title>
+<title>电子送达文书批量下载助手 v2.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -24,6 +24,11 @@
     --info-text: #0c5460;
     --success-color: #28a745;
     --success-hover-color: #1e7e34;
+    --warning-bg: #fff3cd;
+    --warning-border: #ffc107;
+    --warning-text: #856404;
+    --paid-color: #e63946;
+    --paid-bg: #ffe0e3;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -60,10 +65,20 @@
     font-size: 26px;
     font-weight: 700;
   }
-  header p {
-    color: var(--muted-color);
-    font-size: 15px;
+  .version-tag {
+    display: inline-block;
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    vertical-align: middle;
+    margin-left: 8px;
+    letter-spacing: 0.3px;
   }
+  header p { color: var(--muted-color); font-size: 15px; }
 
   label {
     display: block;
@@ -109,15 +124,8 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     font-family: inherit;
   }
-  .btn:hover {
-    background-color: var(--primary-hover-color);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-  }
-  .btn:disabled {
-    background-color: #adb5bd;
-    cursor: not-allowed;
-    box-shadow: none;
-  }
+  .btn:hover { background-color: var(--primary-hover-color); box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
+  .btn:disabled { background-color: #adb5bd; cursor: not-allowed; box-shadow: none; }
   .btn svg { margin-right: 8px; width: 16px; height: 16px; flex-shrink: 0; }
 
   .btn-success {
@@ -126,27 +134,83 @@
     font-size: 13px;
     width: auto;
   }
-  .btn-success:hover {
-    background-color: var(--success-hover-color);
+  .btn-success:hover { background-color: var(--success-hover-color); }
+
+  /* 工具栏按钮统一样式（与 .btn-download-main 高度一致） */
+  .toolbar-btn {
+    background-color: var(--success-color);
+    color: white;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-family: inherit;
+    line-height: 1;
+    transition: background-color 0.2s, box-shadow 0.2s;
   }
+  .toolbar-btn:hover { background-color: var(--success-hover-color); box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
+  .toolbar-btn.btn-disabled {
+    background-color: #adb5bd;
+    cursor: pointer;
+    box-shadow: none;
+  }
+  .toolbar-btn.btn-disabled:hover {
+    background-color: #adb5bd;
+  }
+
+  .btn-sm {
+    padding: 6px 14px;
+    font-size: 13px;
+    width: auto;
+    background-color: #6c757d;
+  }
+  .btn-sm:hover { background-color: #5a6268; }
+
+  .btn-link {
+    background: none;
+    border: none;
+    color: var(--muted-color);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+    text-decoration: underline;
+    width: auto;
+    box-shadow: none;
+  }
+  .btn-link:hover { color: var(--text-color); }
 
   .toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-  .toolbar label { margin-bottom: 0; }
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    min-width: 0;
   }
 
-  .doc-list-container {
-    border-top: 1px solid #e9ecef;
-    padding-top: 16px;
-  }
+
+  .doc-list-container { border-top: 1px solid #e9ecef; padding-top: 16px; }
   .doc-list { min-height: 50px; }
   .doc-list .placeholder {
     margin: 10px 0;
@@ -168,8 +232,6 @@
   .doc-item:last-child { border-bottom: none; }
   .doc-item:hover { background-color: #f1f3f5; }
   .doc-item input[type="checkbox"] { flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; margin-right: 2px; }
-
-  .doc-icon { flex-shrink: 0; width: 20px; height: 20px; margin-right: 6px; }
 
   .file-ext {
     width: 40px;
@@ -225,13 +287,13 @@
   .btn-download-single svg { margin: 0; width: 12px; height: 12px; }
 
   .expiry-warning {
-    background: #fff3cd;
-    border: 1px solid #ffc107;
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
     border-radius: 5px;
     padding: 10px 15px;
     margin-bottom: 14px;
     font-size: 14px;
-    color: #856404;
+    color: var(--warning-text);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -261,6 +323,11 @@
     background-color: #d4edda;
     border-color: #c3e6cb;
     color: #155724;
+  }
+  .status-message.status-warning {
+    background-color: var(--warning-bg);
+    border-color: var(--warning-border);
+    color: var(--warning-text);
   }
 
   .spinner {
@@ -294,10 +361,173 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-  .section-label label { margin-bottom: 0; }
 
-  /* 移动端适配 */
+  /* 用户状态栏 */
+  .user-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .user-email { color: var(--muted-color); }
+  .badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  .badge-free { background: #e9ecef; color: var(--muted-color); }
+  .badge-paid { background: var(--paid-bg); color: var(--paid-color); }
+  .btn-logout {
+    background: none;
+    border: none;
+    color: var(--muted-color);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    text-decoration: underline;
+    width: auto;
+  }
+  .btn-logout:hover { color: var(--error-text); }
+
+  .invite-tag {
+    display: inline;
+    padding: 2px 8px;
+    background: #dbeafe;
+    color: #1e40af;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    margin-left: 4px;
+  }
+  .invite-tag:hover { background: #bfdbfe; }
+
+  /* Modal 样式 */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 10px;
+    padding: 30px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    position: relative;
+  }
+  .modal-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: var(--muted-color);
+    line-height: 1;
+  }
+  .modal-close:hover { color: var(--text-color); }
+  .modal h2 { margin-bottom: 20px; font-size: 18px; color: var(--text-color); text-align: center; }
+  .modal-tabs {
+    display: flex;
+    border-bottom: 2px solid #e9ecef;
+    margin-bottom: 20px;
+  }
+  .modal-tab {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted-color);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+  }
+  .modal-tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { font-size: 13px; margin-bottom: 5px; }
+  .form-group input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus { outline: none; border-color: var(--primary-color); }
+  .form-error { color: var(--error-text); font-size: 12px; margin-top: 4px; min-height: 16px; }
+  .modal .btn { margin-top: 8px; }
+
+  /* 升级弹窗 */
+  .upgrade-feature {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  .upgrade-feature.free { background: #e9ecef; }
+  .upgrade-feature.paid { background: var(--paid-bg); }
+  .upgrade-feature .icon { font-size: 18px; flex-shrink: 0; }
+  .upgrade-price {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--paid-color);
+    margin: 16px 0 12px;
+  }
+  .upgrade-contact {
+    text-align: center;
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 13px;
+    color: var(--muted-color);
+    line-height: 1.8;
+    margin-top: 12px;
+  }
+
+  /* 充值选项 */
+  .recharge-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+  }
+  .recharge-option:hover { background: #f0f7ff; }
+  .recharge-option input[type="radio"] { cursor: pointer; width: 16px; height: 16px; }
+
+  /* 移动端 */
   @media (max-width: 600px) {
     body { padding: 20px 12px; }
     .main-container { padding: 20px 16px; }
@@ -305,38 +535,49 @@
     .doc-item { font-size: 13px; gap: 8px; }
     .doc-name { font-size: 13px; }
     .btn-download-single { padding: 5px 8px; font-size: 11px; }
-    .toolbar { flex-direction: column; align-items: flex-start; gap: 8px; }
-    .toolbar-right { width: 100%; }
-    .toolbar-right .btn-success { flex: 1; justify-content: center; }
+    .toolbar-right { flex-wrap: wrap; gap: 6px; }
+    .toolbar-btn { padding: 8px 12px; font-size: 12px; }
   }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>电子送达文书批量下载助手</h1>
+  <h1>电子送达文书批量下载助手 <span class="version-tag">测试版</span></h1>
   <p>粘贴法院发送的包含文书链接的短信内容，快速解析并准备下载。</p>
 </header>
 
 <div class="main-container">
-  <label for="smsInput">送达短信内容</label>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <label for="smsInput" style="margin-bottom:0">送达短信内容</label>
+    <button id="historyBtn" onclick="showHistoryModal()" style="display:none;padding:2px 10px;font-size:12px;background:#e9ecef;color:#495057;border:1px solid #ced4da;border-radius:4px;cursor:pointer">历史记录</button>
+  </div>
   <textarea id="smsInput" placeholder="请在此粘贴完整的法院送达短信..."></textarea>
   <button class="btn" id="parseBtn" onclick="doParse()">
-    
     <span id="parseBtnText">解析文书列表</span>
   </button>
 </div>
 
 <div class="main-container" id="resultCard" style="display:none">
   <div class="section-label">
-    <label>可下载文书</label>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <button class="btn btn-success" id="selectAllBtn" style="display:none" onclick="toggleSelectAll()">
+    <div class="toolbar-left">
+      <label>可下载文书</label>
+    </div>
+    <div class="toolbar-right">
+      <!-- 用户状态栏（解析成功后显示） -->
+      <div class="user-bar" id="userBar" style="display:none">
+        <span id="userEmailDisplay"></span>
+        <span class="badge" id="userBadge"></span>
+        <button class="btn-logout" id="logoutBtn" onclick="logout()">退出</button>
+        <button class="btn-link" id="upgradeLink" onclick="showUpgradeModal()" style="display:none">升级付费版</button>
+        <button class="invite-tag" id="inviteTag" onclick="showInviteModal()" style="display:none">邀请</button>
+      </div>
+      <button class="toolbar-btn" id="selectAllBtn" style="display:none" onclick="toggleSelectAll()">
         <span id="selectAllText">全选</span>
       </button>
-      <button class="btn btn-success" id="downloadAllBtn" style="display:none" onclick="downloadAll()">
+      <button class="toolbar-btn btn-disabled" id="downloadAllBtn" style="display:none" onclick="onDownloadAll()">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C11.4477 2 11 2.44772 11 3V13.5858L8.70711 11.2929C8.31658 10.9024 7.68342 10.9024 7.29289 11.2929C6.90237 11.6834 6.90237 12.3166 7.29289 12.7071L11.2929 16.7071C11.6834 17.0976 12.3166 17.0976 12.7071 16.7071L16.7071 12.7071C17.0976 12.3166 17.0976 11.6834 16.7071 11.2929C16.3166 10.9024 15.6834 10.9024 15.2929 11.2929L13 13.5858V3C13 2.44772 12.5523 2 12 2ZM4 16C4 15.4477 4.44772 15 5 15H19C19.5523 15 20 15.4477 20 16C20 16.5523 19.5523 17 19 17H5V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V17H5C4.44772 17 4 16.5523 4 16Z"/></svg>
-        <span id="downloadAllText">打包下载全部 (ZIP)</span>
+        <span id="downloadAllText">打包下载 (ZIP)</span>
       </button>
     </div>
   </div>
@@ -353,7 +594,7 @@
   <div id="statusMsg" class="status-message"></div>
 </div>
 
-<div class="disclaimer"><div class="copyright">Copyright &copy; MCTMilk（微信同号） 法米粒信息科技（苏州）有限公司 @2026</div><hr style="margin:15px 0;border:none;border-top:1px solid #ccc;">
+<div class="disclaimer">
   <strong>免责声明:</strong>
   本工具为非官方辅助工具，旨在方便用户批量处理电子送达文书，请自行承担使用风险。
   本工具通过解析您提供的链接与法院官方系统进行交互，请确保您的使用行为符合相关法律法规及官方平台的用户协议。
@@ -361,43 +602,819 @@
   请务必核对下载文件的准确性和完整性。本工具依赖于法院官方平台的接口结构，如遇平台更新可能导致功能失效。
   本工具使用官方API转发下载数据，不对文件做任何缓存。
 </div>
+<div class="copyright">Copyright &copy; MCTMilk（微信同号） 法米粒信息科技（苏州）有限公司 @2026</div>
+
+<!-- 登录/注册 Modal -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('authModal')">&times;</button>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tabLogin" onclick="switchTab('login')">登录</button>
+      <button class="modal-tab" id="tabRegister" onclick="switchTab('register')">注册</button>
+    </div>
+
+    <!-- 登录表单 -->
+    <div id="loginForm">
+      <div class="form-group">
+        <label>手机号</label>
+        <input type="tel" id="loginPhone" placeholder="请输入手机号" maxlength="11" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="loginPwd" placeholder="请输入密码" autocomplete="current-password">
+      </div>
+
+      <!-- 验证码区（needSmsCode 时显示） -->
+      <div id="loginCodeSection" style="display:none">
+        <div class="form-group">
+          <label>短信验证码 <span style="font-size:12px;color:#6c757d">（检测到新设备，请验证）</span></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="loginCode" placeholder="请输入6位验证码" maxlength="6" autocomplete="off" style="flex:1">
+            <button class="btn-sm" id="loginSendBtn" onclick="sendCode('login')" style="background:#e9ecef;color:#495057;padding:9px 12px;font-size:12px;border:1px solid #ced4da;flex-shrink:0;white-space:nowrap">获取验证码</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-error" id="loginError"></div>
+      <button class="btn" id="loginBtn" onclick="doLogin()">登 录</button>
+      <div style="text-align:center;margin-top:10px">
+        <a href="#" onclick="event.preventDefault();closeModal('authModal');showForgotPwdModal()" style="font-size:12px;color:#6c757d;text-decoration:underline">忘记密码？</a>
+      </div>
+    </div>
+
+    <!-- 注册表单 -->
+    <div id="registerForm" style="display:none">
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="regUsername" placeholder="请输入用户名" autocomplete="nickname">
+      </div>
+      <div class="form-group">
+        <label>手机号</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="tel" id="regPhone" placeholder="请输入手机号" maxlength="11" style="flex:1">
+          <button class="btn-sm" id="regSendBtn" onclick="sendCode('register')" style="background:#e9ecef;color:#495057;padding:9px 12px;font-size:12px;border:1px solid #ced4da;flex-shrink:0">获取验证码</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>验证码</label>
+        <input type="text" id="regCode" placeholder="请输入6位验证码" maxlength="6" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>设置密码</label>
+        <input type="password" id="regPwd" placeholder="请设置密码（至少6位）" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label>确认密码</label>
+        <input type="password" id="regPwd2" placeholder="请再次输入密码" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label>邀请码 <span style="color:#9ca3af;font-weight:400">(选填，填写可获奖励)</span></label>
+        <input type="text" id="regInviteCode" placeholder="请输入7位邀请码" maxlength="7" autocomplete="off">
+      </div>
+      <div class="form-error" id="regError"></div>
+      <button class="btn" onclick="doRegister()">注 册</button>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:12px">温馨提示：为了防止泄露您客户的信息，账号仅限本人使用。</p>
+    </div>
+  </div>
+</div>
+
+<!-- 升级付费版 Modal -->
+<div class="modal-overlay" id="upgradeModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('upgradeModal')">&times;</button>
+    <h2 style="text-align:center;margin-bottom:16px">升级付费版</h2>
+
+    <div class="upgrade-feature free">
+      <span class="icon">📄</span>
+      <span>单文件下载 — <strong>免费</strong>（无需登录）</span>
+    </div>
+    <div class="upgrade-feature paid">
+      <span class="icon">📦</span>
+      <span>批量打包下载（ZIP） — <strong>付费功能</strong></span>
+    </div>
+
+    <h3 style="margin:16px 0 8px;font-size:14px;color:#374151">选择套餐</h3>
+
+    <div id="upgradeOptions" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <label class="recharge-option">
+        <input type="radio" name="rechargeType" value="monthly:1" checked> 按月充值 — <strong>5元/月</strong>
+      </label>
+      <label class="recharge-option">
+        <input type="radio" name="rechargeType" value="yearly:1"> 按年充值（1年） — <strong>50元/年</strong>
+      </label>
+      <label class="recharge-option">
+        <input type="radio" name="rechargeType" value="yearly:2"> 按年充值（2年） — <strong>80元</strong>（8折）
+      </label>
+      <label class="recharge-option">
+        <input type="radio" name="rechargeType" value="yearly:3"> 按年充值（3年） — <strong>105元</strong>（7折）
+      </label>
+    </div>
+
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px;margin-bottom:16px;font-size:13px;color:#856404">
+      <strong>请完成付款后，联系客服开通</strong><br>
+      微信：<strong>MCTMilk</strong>（备注"法院文书充值"）
+    </div>
+
+    <button class="btn btn-success" style="width:100%" onclick="closeModal('upgradeModal')">我知道了</button>
+  </div>
+</div>
+
+<!-- 修改密码 Modal（强制改密） -->
+<div class="modal-overlay" id="changePwdModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('changePwdModal')">&times;</button>
+    <h2 style="text-align:center;margin-bottom:8px">修改密码</h2>
+    <p style="text-align:center;font-size:13px;color:#6b757d;margin-bottom:16px">您需要修改初始密码后才能正常使用</p>
+    <div class="form-group">
+      <label>新密码</label>
+      <input type="password" id="changePwdNew" placeholder="请输入新密码（至少6位）" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>确认密码</label>
+      <input type="password" id="changePwdNew2" placeholder="请再次输入新密码" autocomplete="new-password">
+    </div>
+    <div class="form-error" id="changePwdError"></div>
+    <button class="btn" style="width:100%" onclick="doChangePwd()">确认修改</button>
+  </div>
+</div>
+
+<!-- 忘记密码 Modal -->
+<div class="modal-overlay" id="forgotPwdModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('forgotPwdModal')">&times;</button>
+    <h2 style="margin-bottom:20px;font-size:18px;text-align:center">找回密码</h2>
+
+    <!-- Step 1: 输入手机号，获取验证码 -->
+    <div id="forgotStep1">
+      <div class="form-group">
+        <label>注册手机号</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="tel" id="forgotPhone" placeholder="请输入手机号" maxlength="11" style="flex:1">
+          <button class="btn-sm" id="forgotSendBtn" onclick="sendCode('resetpwd')" style="background:#e9ecef;color:#495057;padding:9px 12px;font-size:12px;border:1px solid #ced4da;flex-shrink:0">获取验证码</button>
+        </div>
+      </div>
+      <div class="form-error" id="forgotError"></div>
+    </div>
+
+    <!-- Step 2: 输入验证码 + 新密码 -->
+    <div id="forgotStep2" style="display:none">
+      <div class="form-group">
+        <label>验证码</label>
+        <input type="text" id="forgotCode" placeholder="请输入6位验证码" maxlength="6" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>新密码（至少6位）</label>
+        <input type="password" id="forgotNewPwd" placeholder="设置新密码" autocomplete="new-password">
+      </div>
+      <div class="form-error" id="forgotError2"></div>
+      <button class="btn" onclick="doResetPwd()">确认重置密码</button>
+    </div>
+
+    <div style="margin-top:16px;text-align:center;font-size:13px;color:#6b757d">
+      微信客服：MCTMilk
+    </div>
+  </div>
+</div>
+
+<!-- 历史记录 Modal -->
+<div class="modal-overlay" id="historyModal">
+  <div class="modal" style="max-width:520px">
+    <button class="modal-close" onclick="closeModal('historyModal')">&times;</button>
+    <h2 style="text-align:center;margin-bottom:16px">历史解析记录</h2>
+    <div id="historyList">
+      <div style="text-align:center;color:#9ca3af;padding:20px">加载中...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 邀请 Modal -->
+<div class="modal-overlay" id="inviteModal">
+  <div class="modal" style="max-width:680px">
+    <button class="modal-close" onclick="closeModal('inviteModal')">&times;</button>
+    <h2 style="text-align:center;margin-bottom:16px">邀请好友</h2>
+    <div style="display:flex;gap:20px">
+
+      <!-- 左栏 -->
+      <div style="flex:1;min-width:0">
+        <!-- 邀请码 -->
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px;margin-bottom:16px">
+          <div style="font-size:12px;color:#0369a1;margin-bottom:6px">我的邀请码</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="inviteCodeDisplay" style="font-size:20px;font-weight:700;color:#0369a1;letter-spacing:2px;font-family:monospace"></span>
+            <button onclick="copyInviteCode()" style="padding:4px 10px;background:#0369a1;color:#fff;border:none;border-radius:4px;font-size:12px;cursor:pointer">复制邀请码</button>
+            <button onclick="copyInviteLink()" style="padding:4px 10px;background:#fff;color:#0369a1;border:1px solid #0369a1;border-radius:4px;font-size:12px;cursor:pointer">复制链接</button>
+          </div>
+        </div>
+
+        <!-- 邀请统计 -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:13px;color:#374151;margin-bottom:6px">已邀请：<strong id="inviteTotalCount">0</strong> 人（其中付费 <strong id="invitePaidCount">0</strong> 人）</div>
+        </div>
+
+        <!-- 已获奖励 -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f3f4f6">已获得奖励</div>
+          <div id="inviteRewardsList" style="font-size:13px;color:#6b7280"></div>
+        </div>
+
+        <!-- 奖励政策 -->
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f3f4f6">奖励政策</div>
+          <div id="invitePolicyList" style="font-size:12px;color:#6b7280;line-height:1.8"></div>
+        </div>
+      </div>
+
+      <!-- 右栏：已邀请用户 -->
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f3f4f6">已邀请用户</div>
+        <div id="inviteesList" style="font-size:12px;max-height:300px;overflow-y:auto"></div>
+        <div id="inviteesPagination" style="margin-top:10px;text-align:center"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 <script>
-const API = '';
-
-let currentDocs = [];
-let selectAllOn = false;
-let hasValidParams = false;
-
-// 从短信内容中解析 URL 参数
-function parseParamsFromSMS(sms) {
-  const match = sms.match(/https?:\/\/zxfw\.court\.gov\.cn[^\s]*/);
-  if (!match) return null;
+// ─── Auth State ───────────────────────────────────────────────────────
+// ─── Device Fingerprint ─────────────────────────────────────────────
+function getDeviceFingerprint() {
+  const parts = [
+    navigator.userAgent,
+    navigator.language,
+    screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.hardwareConcurrency || '',
+    navigator.platform || '',
+  ];
   try {
-    const url = new URL(match[0]);
-    let params;
-    // hash 中的参数（#/path?qdbh=...）
-    if (url.hash && url.hash.includes('?')) {
-      params = new URLSearchParams(url.hash.split('?')[1]);
-    } else {
-      params = url.searchParams;
-    }
-    const sdbh = params.get('sdbh');
-    const qdbh = params.get('qdbh');
-    const sdsin = params.get('sdsin');
-    if (sdbh && qdbh && sdsin) return { sdbh, qdbh, sdsin };
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillText('court-tool-fp', 2, 2);
+    parts.push(c.toDataURL().slice(-50));
   } catch(e) {}
-  return null;
+  return btoa(parts.join('||')).slice(0, 64);
 }
 
+let currentUser = null;
+let token = localStorage.getItem('ct_token') || null;
+const API_BASE = '/wenshu'; // 请求发到 /wenshu/api/*，nginx 透传到 Express
+
+// 设备指纹初始化
+window.deviceFP = localStorage.getItem('ct_device_fp') || (() => {
+  const fp = getDeviceFingerprint();
+  localStorage.setItem('ct_device_fp', fp);
+  return fp;
+})();
+
+// ─── Init ────────────────────────────────────────────────────────────
+(function init() {
+  // URL带邀请码参数 → 自动填入注册表单并打开注册弹窗
+  const urlParams = new URLSearchParams(location.search);
+  const inviteFromUrl = urlParams.get('invite');
+  if (inviteFromUrl) {
+    const input = document.getElementById('regInviteCode');
+    if (input) input.value = inviteFromUrl.trim();
+    if (!token) setTimeout(() => showAuthModal('register'), 100);
+  }
+
+  if (token) {
+    fetch('' + API_BASE + '/api/user/me', { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(user => { currentUser = user; updateUserBar(); })
+      .catch(() => { token = null; localStorage.removeItem('ct_token'); updateDownloadBtnState(); });
+  } else {
+    updateDownloadBtnState();
+  }
+})();
+
+function authHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (token) h['Authorization'] = 'Bearer ' + token;
+  return h;
+}
+
+// ─── User Bar ─────────────────────────────────────────────────────────
+function updateUserBar() {
+  const bar = document.getElementById('userBar');
+  const emailEl = document.getElementById('userEmailDisplay');
+  const badgeEl = document.getElementById('userBadge');
+  const upgradeLink = document.getElementById('upgradeLink');
+
+  if (currentUser) {
+    bar.style.display = 'flex';
+    emailEl.textContent = currentUser.username || currentUser.phone || '用户';
+    emailEl.style.cursor = 'pointer';
+    emailEl.onclick = showHistoryModal;
+    emailEl.title = '点击查看历史解析记录';
+    badgeEl.textContent = currentUser.isPaid ? '付费版' : '免费版';
+    badgeEl.className = 'badge ' + (currentUser.isPaid ? 'badge-paid' : 'badge-free');
+    if (currentUser.lifetime === 1) {
+      badgeEl.title = '终身会员，永不过期';
+    } else if (currentUser.paidExpiresAt) {
+      badgeEl.title = '到期时间：' + currentUser.paidExpiresAt.replace('T', ' ').slice(0, 19);
+    } else {
+      badgeEl.title = '';
+    }
+    upgradeLink.style.display = currentUser.isPaid ? 'none' : 'inline';
+    const inviteTag = document.getElementById('inviteTag');
+    if (inviteTag) { inviteTag.style.display = 'inline'; inviteTag.onclick = showInviteModal; }
+    const historyBtn = document.getElementById('historyBtn');
+    if (historyBtn) historyBtn.style.display = 'inline';
+  } else {
+    bar.style.display = 'none';
+    upgradeLink.style.display = 'none';
+    const inviteTag = document.getElementById('inviteTag');
+    if (inviteTag) inviteTag.style.display = 'none';
+    const historyBtn = document.getElementById('historyBtn');
+    if (historyBtn) historyBtn.style.display = 'none';
+  }
+  updateDownloadBtnState();
+}
+
+// ─── 历史记录 ────────────────────────────────────────────────────
+async function showHistoryModal() {
+  openModal('historyModal');
+  const list = document.getElementById('historyList');
+  list.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:20px">加载中...</div>';
+
+  try {
+    const resp = await fetch('' + API_BASE + '/api/history', { headers: authHeaders() });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+
+    if (!data.history || data.history.length === 0) {
+      list.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:20px">暂无历史记录</div>';
+      return;
+    }
+
+    list.innerHTML = data.history.map(item => {
+      const court = item.court || '未知法院';
+      const caseNum = item.caseNumber || '未知案号';
+      const docCount = item.docCount || 0;
+      const time = item.createdAt ? item.createdAt.replace('T', ' ').slice(0, 16) : '';
+      const contentEsc = item.content.replace(/"/g, '&quot;');
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:13px;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:500;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${court}</div>
+          <div style="color:#9ca3af;font-size:12px">${caseNum} · ${docCount}份文书 · ${time}</div>
+        </div>
+        <button class="btn-sm btn-success" style="flex-shrink:0" onclick="reshowFromHistory(\&quot;${contentEsc}\&quot;)">重新解析</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="text-align:center;color:#e63946;padding:20px">加载失败</div>';
+  }
+}
+
+function reshowFromHistory(content) {
+  document.getElementById('smsInput').value = content;
+  closeModal('historyModal');
+  showStatus('已填入历史短信，点击"解析文书列表"继续', 'info');
+}
+
+// ─── Download Button State ──────────────────────────────────────────────
+function updateDownloadBtnState() {
+  const btn = document.getElementById('downloadAllBtn');
+  if (!btn) return;
+  if (!token || !currentUser || !currentUser.isPaid) {
+    btn.classList.add('btn-disabled');
+  } else {
+    btn.classList.remove('btn-disabled');
+  }
+}
+
+// ─── Auth Modal ──────────────────────────────────────────────────────
+function showAuthModal() {
+  switchTab('login');
+  // 重置登录表单状态
+  document.getElementById('loginPhone').value = '';
+  document.getElementById('loginPwd').value = '';
+  document.getElementById('loginCode').value = '';
+  document.getElementById('loginCodeSection').style.display = 'none';
+  document.getElementById('loginError').textContent = '';
+  openModal('authModal');
+}
+
+function switchTab(tab) {
+  document.getElementById('tabLogin').className = 'modal-tab' + (tab === 'login' ? ' active' : '');
+  document.getElementById('tabRegister').className = 'modal-tab' + (tab === 'register' ? ' active' : '');
+  document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('regError').textContent = '';
+  if (tab === 'register') document.getElementById('regPwd2').value = '';
+}
+
+async function doLogin() {
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+
+  const phone = document.getElementById('loginPhone').value.trim();
+  const password = document.getElementById('loginPwd').value;
+  const code = document.getElementById('loginCode').value.trim();
+  const codeSectionVisible = document.getElementById('loginCodeSection').style.display !== 'none';
+
+  if (!phone) { errEl.textContent = '请输入手机号'; return; }
+  if (!/^1[3-9]\d{9}$/.test(phone)) { errEl.textContent = '手机号格式不正确'; return; }
+
+  let body;
+  if (codeSectionVisible) {
+    // 验证码登录
+    if (!code || code.length !== 6) { errEl.textContent = '请输入6位验证码'; return; }
+    body = { phone, code, device_fp: window.deviceFP };
+  } else {
+    // 密码登录
+    if (!password) { errEl.textContent = '请输入密码'; return; }
+    body = { phone, password, device_fp: window.deviceFP };
+  }
+
+  try {
+    const resp = await fetch('' + API_BASE + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+
+    if (data.banned) {
+      errEl.textContent = data.message;
+      return;
+    }
+
+    if (!resp.ok) { errEl.textContent = data.error; return; }
+
+    if (data.needSmsCode) {
+      // 换设备了，显示验证码输入框
+      document.getElementById('loginCodeSection').style.display = 'block';
+      document.getElementById('loginPwd').readOnly = true;
+      errEl.textContent = data.message;
+      return;
+    }
+
+    // 登录成功
+    token = data.token;
+    localStorage.setItem('ct_token', token);
+    // 保存设备指纹
+    localStorage.setItem('ct_device_fp', window.deviceFP);
+    currentUser = data.user;
+    updateUserBar();
+    closeModal('authModal');
+    updateDownloadBtnState();
+
+    if (data.user.mustChangePwd) {
+      showChangePwdModal();
+      return;
+    }
+    showStatus('登录成功', 'success');
+  } catch(e) {
+    errEl.textContent = '登录失败，请稍后重试';
+  }
+}
+
+async function doRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  const phone = document.getElementById('regPhone').value.trim();
+  const code = document.getElementById('regCode').value.trim();
+  const password = document.getElementById('regPwd').value;
+  const password2 = document.getElementById('regPwd2').value;
+  const invite_code = document.getElementById('regInviteCode').value.trim();
+  const errEl = document.getElementById('regError');
+  errEl.textContent = '';
+  if (!username) { errEl.textContent = '请输入用户名'; return; }
+  if (username.length < 2) { errEl.textContent = '用户名至少2个字符'; return; }
+  if (!phone) { errEl.textContent = '请输入手机号'; return; }
+  if (!/^1[3-9]\d{9}$/.test(phone)) { errEl.textContent = '手机号格式不正确'; return; }
+  if (!code || code.length !== 6) { errEl.textContent = '请输入6位验证码'; return; }
+  if (!password || password.length < 6) { errEl.textContent = '请设置密码（至少6位）'; return; }
+  if (password !== password2) { errEl.textContent = '两次输入的密码不一致，请重新输入'; return; }
+
+  try {
+    const resp = await fetch('' + API_BASE + '/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, phone, code, password, device_fp: window.deviceFP, invite_code }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { errEl.textContent = data.error; return; }
+
+    token = data.token;
+    localStorage.setItem('ct_token', token);
+    currentUser = data.user;
+    updateUserBar();
+    closeModal('authModal');
+    updateDownloadBtnState();
+    showStatus('注册成功，已自动登录', 'success');
+  } catch(e) {
+    errEl.textContent = '注册失败，请稍后重试';
+  }
+}
+
+// ─── Change Password ─────────────────────────────────────────────────
+function showChangePwdModal() {
+  document.getElementById('changePwdNew').value = '';
+  document.getElementById('changePwdNew2').value = '';
+  document.getElementById('changePwdError').textContent = '';
+  openModal('changePwdModal');
+}
+
+async function doChangePwd() {
+  const newPwd = document.getElementById('changePwdNew').value;
+  const newPwd2 = document.getElementById('changePwdNew2').value;
+  const errEl = document.getElementById('changePwdError');
+  errEl.textContent = '';
+  if (!newPwd || newPwd.length < 6) { errEl.textContent = '密码至少6位'; return; }
+  if (newPwd !== newPwd2) { errEl.textContent = '两次输入的密码不一致'; return; }
+
+  try {
+    const resp = await fetch('' + API_BASE + '/api/user/change-password', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ newPassword: newPwd }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { errEl.textContent = data.error; return; }
+    closeModal('changePwdModal');
+    currentUser.mustChangePwd = false;
+    showStatus('密码修改成功', 'success');
+  } catch(e) {
+    errEl.textContent = '修改失败，请稍后重试';
+  }
+}
+
+// ─── Upgrade Modal ────────────────────────────────────────────────────
+function showUpgradeModal() {
+  openModal('upgradeModal');
+}
+
+// ─── 邀请 Modal ───────────────────────────────────────────────────────
+let inviteTotal = 0, invitePaid = 0, invitePage = 1, inviteTotalPages = 1;
+
+async function showInviteModal() {
+  openModal('inviteModal');
+  invitePage = 1;
+  try {
+    const resp = await fetch('' + API_BASE + '/api/user/invite/status', { headers: authHeaders() });
+    if (!resp.ok) return;
+    const d = await resp.json();
+    inviteTotal = d.total || 0;
+    invitePaid = d.paid || 0;
+
+    // 邀请码
+    document.getElementById('inviteCodeDisplay').textContent = d.inviteCode || '--------';
+
+    // 邀请统计
+    document.getElementById('inviteTotalCount').textContent = inviteTotal;
+    document.getElementById('invitePaidCount').textContent = invitePaid;
+
+    // 已获奖励
+    const earned = (d.rewards || []).map(r => r.type);
+    const policy = d.policy || [];
+    let rewardsHtml = '';
+    policy.forEach(p => {
+      const got = earned.includes(p.type);
+      if (got) {
+        const r = d.rewards.find(x => x.type === p.type);
+        const date = r && r.grantedAt ? ('（' + r.grantedAt.slice(0, 10) + '）') : '';
+        rewardsHtml += '<div style="color:#16a34a;font-size:13px;margin-bottom:4px">✓ ' + p.reward + ' ' + date + '</div>';
+      } else {
+        const needTotal = (p.remaining_total != null) ? (p.remaining_total - inviteTotal) : 0;
+        const needPaid = (p.remaining_paid != null) ? (p.remaining_paid - invitePaid) : 0;
+        let hint = '';
+        if (p.remaining_total != null && needTotal > 0 && p.remaining_paid != null && needPaid > 0) {
+          hint = '（再邀请 <strong>' + needTotal + '</strong> 人 或 付费 <strong>' + needPaid + '</strong> 人）';
+        } else if (p.remaining_total != null && needTotal > 0) {
+          hint = '（再邀请 <strong>' + needTotal + '</strong> 人）';
+        } else if (needPaid > 0) {
+          hint = '（再邀请付费用户 <strong>' + needPaid + '</strong> 人）';
+        }
+        rewardsHtml += '<div style="color:#9ca3af;margin-bottom:4px">✗ ' + p.reward + ' ' + hint + '</div>';
+      }
+    });
+    document.getElementById('inviteRewardsList').innerHTML = rewardsHtml || '<div style="color:#9ca3af;font-size:12px">暂无奖励</div>';
+
+    // 奖励政策
+    let policyHtml = '';
+    policy.forEach((p, i) => {
+      policyHtml += '<div style="margin-bottom:6px"><span style="color:#0369a1;font-weight:600">Lv' + p.level + '</span>：' + p.condition + ' → <strong>' + p.reward + '</strong></div>';
+    });
+    document.getElementById('invitePolicyList').innerHTML = policyHtml;
+
+    await loadInvitees(1);
+  } catch(e) {
+    console.error('load invite status error', e);
+  }
+}
+
+async function loadInvitees(page) {
+  invitePage = page;
+  try {
+    const resp = await fetch('' + API_BASE + '/api/user/invite/invitees?page=' + page, { headers: authHeaders() });
+    if (!resp.ok) return;
+    const d = await resp.json();
+    const list = document.getElementById('inviteesList');
+    if (!d.invitees || d.invitees.length === 0) {
+      list.innerHTML = '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:20px">暂无已邀请用户</div>';
+      document.getElementById('inviteesPagination').innerHTML = '';
+      return;
+    }
+    let html = '';
+    d.invitees.forEach(u => {
+      const memberTypeColor = { '终身会员': '#9333ea', '订阅用户': '#0369a1', '免费用户': '#9ca3af' };
+      const color = memberTypeColor[u.memberType] || '#9ca3af';
+      const date = u.invitedAt ? u.invitedAt.slice(0, 10) : '';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f3f4f6">';
+      html += '<div><div style="font-weight:500;color:#374151;font-size:13px">' + (u.username || '未知') + '</div>';
+      html += '<div style="font-size:11px;color:#9ca3af">' + date + '</div></div>';
+      html += '<span style="font-size:11px;color:#fff;background:' + color + ';padding:2px 8px;border-radius:10px;white-space:nowrap">' + u.memberType + '</span>';
+      html += '</div>';
+    });
+    list.innerHTML = html;
+
+    // 分页
+    const totalPages = Math.ceil((d.total || 0) / d.pageSize) || 1;
+    inviteTotalPages = totalPages;
+    const pg = document.getElementById('inviteesPagination');
+    if (d.total === 0) { pg.innerHTML = ''; return; }
+    let pgHtml = '';
+    pgHtml += '<button onclick="loadInvitees(' + (page - 1) + ')" ' + (page <= 1 ? 'disabled' : '') + ' style="padding:3px 8px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;cursor:' + (page <= 1 ? 'not-allowed' : 'pointer') + ';background:#fff;color:' + (page <= 1 ? '#9ca3af' : '#374151') + '">上一页</button>';
+    pgHtml += '<span style="font-size:12px;color:#6b7280;margin:0 8px">' + page + ' / ' + totalPages + '</span>';
+    pgHtml += '<button onclick="loadInvitees(' + (page + 1) + ')" ' + (page >= totalPages ? 'disabled' : '') + ' style="padding:3px 8px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;cursor:' + (page >= totalPages ? 'not-allowed' : 'pointer') + ';background:#fff;color:' + (page >= totalPages ? '#9ca3af' : '#374151') + '">下一页</button>';
+    pg.innerHTML = pgHtml;
+  } catch(e) {
+    console.error('load invitees error', e);
+  }
+}
+
+function copyInviteCode() {
+  const code = document.getElementById('inviteCodeDisplay').textContent.trim();
+  if (!code || code === '--------') return;
+  const ta = document.createElement('textarea');
+  ta.value = code;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(ta);
+  showStatus(ok ? '邀请码已复制' : '邀请码：' + code, ok ? 'success' : 'info');
+}
+
+function copyInviteLink() {
+  const code = document.getElementById('inviteCodeDisplay').textContent.trim();
+  if (!code || code === '--------') return;
+  const link = location.origin + location.pathname + '?invite=' + code;
+  const ta = document.createElement('textarea');
+  ta.value = link;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(ta);
+  showStatus(ok ? '邀请链接已复制' : '链接：' + link, ok ? 'success' : 'info');
+}
+
+// ─── Send SMS Code ────────────────────────────────────────────────────
+let sendCodeTimers = {};
+
+function sendCode(purpose) {
+  const phoneElMap = { register: 'regPhone', forgotpwd: 'forgotPhone', login: 'loginPhone' };
+  const btnElMap = { register: 'regSendBtn', forgotpwd: 'forgotSendBtn', login: 'loginSendBtn' };
+  const phoneElId = phoneElMap[purpose];
+  const btnElId = btnElMap[purpose];
+  if (!phoneElId || !btnElId) return;
+  const phone = document.getElementById(phoneElId).value.trim();
+
+  if (!phone) { alert('请先输入手机号'); return; }
+  if (!/^1[3-9]\d{9}$/.test(phone)) { alert('手机号格式不正确'); return; }
+
+  const btn = document.getElementById(btnElId);
+  let countdown = 60;
+  btn.disabled = true;
+  btn.textContent = countdown + '秒后重发';
+
+  const tick = () => {
+    countdown--;
+    if (countdown <= 0) {
+      btn.disabled = false;
+      btn.textContent = '获取验证码';
+      clearInterval(sendCodeTimers[purpose]);
+    } else {
+      btn.textContent = countdown + '秒后重发';
+    }
+  };
+  tick();
+  sendCodeTimers[purpose] = setInterval(tick, 1000);
+
+  fetch('' + API_BASE + '/api/sms/send-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, purpose }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        clearInterval(sendCodeTimers[purpose]);
+        btn.disabled = false;
+        btn.textContent = '获取验证码';
+        alert(data.error || '发送失败，请稍后重试');
+      }
+    })
+    .catch(() => {
+      clearInterval(sendCodeTimers[purpose]);
+      btn.disabled = false;
+      btn.textContent = '获取验证码';
+    });
+}
+
+// ─── Forgot Password ──────────────────────────────────────────────────
+function showForgotPwdModal() {
+  document.getElementById('forgotStep1').style.display = 'block';
+  document.getElementById('forgotStep2').style.display = 'none';
+  document.getElementById('forgotPhone').value = '';
+  document.getElementById('forgotCode').value = '';
+  document.getElementById('forgotNewPwd').value = '';
+  document.getElementById('forgotError').textContent = '';
+  document.getElementById('forgotError2').textContent = '';
+  openModal('forgotPwdModal');
+}
+
+function doForgotPwd() {
+  const phone = document.getElementById('forgotPhone').value.trim();
+  if (!phone) { document.getElementById('forgotError').textContent = '请输入手机号'; return; }
+  if (!/^1[3-9]\d{9}$/.test(phone)) { document.getElementById('forgotError').textContent = '手机号格式不正确'; return; }
+
+  fetch('' + API_BASE + '/api/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('forgotError').textContent = data.error;
+      } else {
+        document.getElementById('forgotStep1').style.display = 'none';
+        document.getElementById('forgotStep2').style.display = 'block';
+        // 自动触发发验证码
+        sendCode('resetpwd');
+      }
+    })
+    .catch(() => {
+      document.getElementById('forgotError').textContent = '请求失败，请稍后重试';
+    });
+}
+
+function doResetPwd() {
+  const phone = document.getElementById('forgotPhone').value.trim();
+  const code = document.getElementById('forgotCode').value.trim();
+  const password = document.getElementById('forgotNewPwd').value;
+  const errEl = document.getElementById('forgotError2');
+  errEl.textContent = '';
+
+  if (!code || code.length !== 6) { errEl.textContent = '请输入6位验证码'; return; }
+  if (!password || password.length < 6) { errEl.textContent = '密码至少6位'; return; }
+
+  fetch('' + API_BASE + '/api/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, code, password }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (!r.ok) { errEl.textContent = data.error; return; }
+      closeModal('forgotPwdModal');
+      showStatus('密码重置成功，请使用手机号+密码登录', 'success');
+    })
+    .catch(() => { errEl.textContent = '请求失败，请稍后重试'; });
+}
+
+function logout() {
+  token = null;
+  currentUser = null;
+  localStorage.removeItem('ct_token');
+  updateUserBar();
+  updateDownloadBtnState();
+  showStatus('已退出登录', 'info');
+}
+
+// ─── Modal helpers ────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => {
+    if (e.target === el) el.classList.remove('active');
+  });
+});
+
+// ─── Parse ────────────────────────────────────────────────────────────
 async function doParse() {
   const sms = document.getElementById('smsInput').value.trim();
   if (!sms) { showStatus('请先粘贴送达短信内容。', 'error'); return; }
 
-  const params = parseParamsFromSMS(sms);
-  if (!params) { showStatus('未能从短信中提取到有效的法院文书链接。', 'error'); return; }
-
-  // 设置按钮加载状态
   const btn = document.getElementById('parseBtn');
   const btnText = document.getElementById('parseBtnText');
   btn.disabled = true;
@@ -410,25 +1427,22 @@ async function doParse() {
   hideStatus();
 
   try {
-    const resp = await fetch(API + '/api/scrape', {
+    const resp = await fetch('' + API_BASE + '/api/scrape', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ url: sms }),
     });
     const data = await resp.json();
 
     if (!resp.ok) throw new Error(data.error || '解析失败');
 
-    // 过期
     if (data.expired) {
       document.getElementById('docList').innerHTML = '<p class="placeholder">送达短信已过下载期限，请联系法院重新获取。</p>';
       document.getElementById('resultCard').style.display = 'block';
       return;
     }
 
-    hasValidParams = true;
     currentDocs = data.files || [];
-
     renderDocList(currentDocs, data.expiresAt);
 
   } catch(e) {
@@ -443,15 +1457,21 @@ async function doParse() {
   }
 }
 
+// ─── Render Doc List ─────────────────────────────────────────────────
+let currentDocs = [];
+let selectAllOn = false;
+
 function renderDocList(docs, expiresAt) {
   const card = document.getElementById('resultCard');
   const list = document.getElementById('docList');
-  const placeholder = document.getElementById('placeholder');
   const selectAllBtn = document.getElementById('selectAllBtn');
   const downloadAllBtn = document.getElementById('downloadAllBtn');
   const expiryWarn = document.getElementById('expiryWarning');
 
   card.style.display = 'block';
+  updateUserBar();
+  updateDownloadBtnState();
+  updateDownloadBtnState(); // 确保按钮颜色正确（登录状态检测）
 
   if (!docs || docs.length === 0) {
     list.innerHTML = '<p class="placeholder">未找到可下载文书，请确认链接是否正确。</p>';
@@ -461,7 +1481,6 @@ function renderDocList(docs, expiresAt) {
     return;
   }
 
-  // 过期警告
   if (expiresAt) {
     document.getElementById('expiryText').textContent = '下载链接有效期至：' + expiresAt + '（请在此之前完成下载）';
     expiryWarn.style.display = 'flex';
@@ -469,13 +1488,11 @@ function renderDocList(docs, expiresAt) {
     expiryWarn.style.display = 'none';
   }
 
-  // 显示全选和打包下载按钮
   selectAllBtn.style.display = 'flex';
   downloadAllBtn.style.display = 'flex';
   selectAllOn = false;
   updateSelectAllBtn();
 
-  // 渲染列表
   list.innerHTML = '';
   docs.forEach((doc, i) => {
     const item = document.createElement('div');
@@ -515,6 +1532,7 @@ function escHtml(s) {
   return d.innerHTML;
 }
 
+// ─── Select All ───────────────────────────────────────────────────────
 function toggleSelectAll() {
   selectAllOn = !selectAllOn;
   document.querySelectorAll('.doc-item input[type="checkbox"]').forEach(cb => cb.checked = selectAllOn);
@@ -524,7 +1542,7 @@ function toggleSelectAll() {
 
 function updateSelectAllBtn() {
   document.getElementById('selectAllText').textContent = selectAllOn ? '取消全选' : '全选';
-  document.getElementById('selectAllBtn').style.background = selectAllOn ? '#6c757d' : '';
+  document.getElementById('selectAllBtn').style.backgroundColor = selectAllOn ? '#6c757d' : '';
 }
 
 function updateDownloadAllText() {
@@ -537,6 +1555,7 @@ function updateDownloadAllText() {
   }
 }
 
+// ─── Download ─────────────────────────────────────────────────────────
 async function downloadSingle(idx) {
   const doc = currentDocs[idx];
   const btn = event.target.closest('button');
@@ -545,7 +1564,9 @@ async function downloadSingle(idx) {
   btn.innerHTML = '<span style="font-size:11px">下载中...</span>';
 
   try {
-    const resp = await fetch('/api/download?url=' + encodeURIComponent(doc.href) + '&filename=' + encodeURIComponent(doc.name));
+    const resp = await fetch('' + API_BASE + '/api/download?url=' + encodeURIComponent(doc.href) + '&filename=' + encodeURIComponent(doc.name), {
+      headers: authHeaders(),
+    });
     if (!resp.ok) {
       const d = await resp.json();
       throw new Error(d.error);
@@ -562,11 +1583,8 @@ async function downloadSingle(idx) {
   }
 }
 
-async function downloadAll() {
+async function onDownloadAll() {
   const checked = document.querySelectorAll('.doc-item input[type="checkbox"]:checked');
-  const btn = document.getElementById('downloadAllBtn');
-  const btnText = document.getElementById('downloadAllText');
-
   let indices;
   if (checked.length > 0) {
     indices = Array.from(checked).map(cb => parseInt(cb.dataset.idx));
@@ -579,6 +1597,24 @@ async function downloadAll() {
     return;
   }
 
+  // 未登录：弹出登录框
+  if (!token) {
+    showAuthModal();
+    return;
+  }
+
+  // 未付费：弹出升级框
+  if (!currentUser.isPaid) {
+    showUpgradeModal();
+    return;
+  }
+
+  await downloadAll(indices);
+}
+
+async function downloadAll(indices) {
+  const btn = document.getElementById('downloadAllBtn');
+  const btnText = document.getElementById('downloadAllText');
   const files = indices.map(i => ({ url: currentDocs[i].href, name: currentDocs[i].name }));
 
   btn.disabled = true;
@@ -586,12 +1622,27 @@ async function downloadAll() {
   showStatus(`正在打包 ${files.length} 个文件，请稍候...`, 'info');
 
   try {
-    const resp = await fetch('/api/batch-download', {
+    const resp = await fetch('' + API_BASE + '/api/batch-download', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ files }),
     });
     const data = await resp.json();
+
+    if (resp.status === 403 && data.requiresUpgrade) {
+      showStatus('批量打包下载为付费功能，请先开通付费版。', 'warning');
+      showUpgradeModal();
+      return;
+    }
+    if (resp.status === 401) {
+      showStatus('登录已过期，请重新登录。', 'error');
+      token = null;
+      localStorage.removeItem('ct_token');
+      currentUser = null;
+      updateUserBar();
+      showAuthModal();
+      return;
+    }
     if (!resp.ok) throw new Error(data.error || '打包失败');
 
     const bin = base64ToBuffer(data.zip);
@@ -611,6 +1662,7 @@ async function downloadAll() {
   }
 }
 
+// ─── Utils ───────────────────────────────────────────────────────────
 function showStatus(msg, type) {
   const el = document.getElementById('statusMsg');
   el.textContent = msg;
@@ -619,8 +1671,7 @@ function showStatus(msg, type) {
 }
 
 function hideStatus() {
-  const el = document.getElementById('statusMsg');
-  el.style.display = 'none';
+  document.getElementById('statusMsg').style.display = 'none';
 }
 
 function base64ToBuffer(b64) {
