@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { get, run } = require('../db');
+const { get, run, getAsync, runAsync } = require('../db');
 const { generateToken, isPaidUser } = require('../middleware/auth');
 
 const router = express.Router();
@@ -23,11 +23,11 @@ function respondSuccess(user, res) {
   });
 }
 
-// ─── 邀请奖励核心逻辑 ─────────────────────────────────────────────
+// ─── 邀请奖励核心逻辑（同步，服务器启动后调用）────────────────────
 function checkAndGrantInviteReward(userId) {
   const user = get('SELECT * FROM users WHERE id=?', [userId]);
   if (!user) return;
-  if (user.lifetime === 1) return; // 终身会员不处理
+  if (user.lifetime === 1) return;
 
   const total = get('SELECT COUNT(*) as c FROM invite_relations WHERE inviter_id=?', [userId])?.c || 0;
 
@@ -37,7 +37,6 @@ function checkAndGrantInviteReward(userId) {
     WHERE ir.inviter_id=? AND (u.lifetime=1 OR (u.is_paid=1 AND u.paid_expires_at>datetime('now')))
   `, [userId])?.c || 0;
 
-  // 已获最高奖励
   const existingReward = get("SELECT reward_type FROM invite_rewards WHERE user_id=? ORDER BY id DESC LIMIT 1", [userId]);
 
   const rewardLevels = [
@@ -90,10 +89,8 @@ function checkAbuseAndRecord(user, device_fp, ip) {
   const recent24h = get("SELECT COUNT(DISTINCT device_fp) as c FROM login_attempts WHERE user_id=? AND success=1 AND created_at>datetime('now','-24 hours')", [user.id])?.c || 0;
   const recent7d = get("SELECT COUNT(DISTINCT device_fp) as c FROM login_attempts WHERE user_id=? AND success=1 AND created_at>datetime('now','-7 days')", [user.id])?.c || 0;
 
-  // 记录本次登录
   run('INSERT INTO login_attempts (user_id, device_fp, ip, success) VALUES (?,?,?,1)', [user.id, device_fp || null, ip]);
 
-  // 封禁检查（已有记录后再判断，避免误封新账号）
   if (recent24h >= limit24h || recent7d >= limit7d) {
     run('UPDATE users SET is_active=0 WHERE id=?', [user.id]);
     return { banned: true };
@@ -111,30 +108,27 @@ router.post('/register', async (req, res) => {
   if (!code) return res.status(400).json({ error: '验证码不能为空' });
   if (!password || password.length < 6) return res.status(400).json({ error: '密码至少6位' });
 
-  const smsRecord = get("SELECT * FROM sms_codes WHERE phone=? AND code=? AND purpose='register' AND used=0 AND expires_at>datetime('now') ORDER BY id DESC LIMIT 1", [phone, code]);
+  const smsRecord = await getAsync("SELECT * FROM sms_codes WHERE phone=? AND code=? AND purpose='register' AND used=0 AND expires_at>datetime('now') ORDER BY id DESC LIMIT 1", [phone, code]);
   if (!smsRecord) return res.status(400).json({ error: '验证码错误或已过期，请重新获取' });
-  run('UPDATE sms_codes SET used=1 WHERE id=?', [smsRecord.id]);
+  await runAsync('UPDATE sms_codes SET used=1 WHERE id=?', [smsRecord.id]);
 
-  const existing = get('SELECT id FROM users WHERE phone=?', [phone]);
+  const existing = await getAsync('SELECT id FROM users WHERE phone=?', [phone]);
   if (existing) return res.status(409).json({ error: '该手机号已注册，请直接登录' });
 
   const hash = await bcrypt.hash(password, 10);
-  const result = run('INSERT INTO users (username, phone, password_hash) VALUES (?,?,?)', [username.trim()], phone, hash);
+  const result = await runAsync('INSERT INTO users (username, phone, password_hash) VALUES (?,?,?)', [username.trim(), phone, hash]);
   const user = { id: result.lastInsertRowid, username: username.trim(), phone, paid_expires_at: null, lifetime: 0 };
 
-  // 注册时绑定设备
   const device_fp = req.body.device_fp;
   if (device_fp) {
-    run('UPDATE users SET device_token=? WHERE id=?', [device_fp, user.id]);
+    await runAsync('UPDATE users SET device_token=? WHERE id=?', [device_fp, user.id]);
   }
 
-  // 处理邀请码
   if (invite_code && invite_code.trim()) {
-    const inviter = get('SELECT user_id FROM invite_codes WHERE code=?', [invite_code.trim().toLowerCase()]);
+    const inviter = await getAsync('SELECT user_id FROM invite_codes WHERE code=?', [invite_code.trim().toLowerCase()]);
     if (inviter && inviter.user_id !== user.id) {
-      run('INSERT INTO invite_relations (inviter_id, invitee_id) VALUES (?,?)', [inviter.user_id, user.id]);
-      // 检查并发放邀请奖励
-      checkAndGrantInviteReward(inviter.user_id, db);
+      await runAsync('INSERT INTO invite_relations (inviter_id, invitee_id) VALUES (?,?)', [inviter.user_id, user.id]);
+      checkAndGrantInviteReward(inviter.user_id);
     }
   }
 
@@ -148,50 +142,42 @@ router.post('/login', async (req, res) => {
   if (!phone) return res.status(400).json({ error: '请输入手机号' });
   if (!/^1[3-9]\d{9}$/.test(phone)) return res.status(400).json({ error: '手机号格式不正确' });
 
-    const user = get('SELECT * FROM users WHERE phone=?', [phone]);
+  const user = await getAsync('SELECT * FROM users WHERE phone=?', [phone]);
   if (!user) return res.status(401).json({ error: '手机号或密码错误' });
 
-  // 封禁检查
   if (user.is_active === 0) {
     return res.json({ banned: true, message: '账号异常，已临时封禁，请联系客服MCTMilk解封' });
   }
 
-  // 情况1：带验证码（已在新设备，需短信确认）
   if (code) {
-    const sms = get("SELECT * FROM sms_codes WHERE phone=? AND code=? AND purpose='login' AND used=0 AND expires_at>datetime('now') ORDER BY id DESC LIMIT 1", [phone, code]);
+    const sms = await getAsync("SELECT * FROM sms_codes WHERE phone=? AND code=? AND purpose='login' AND used=0 AND expires_at>datetime('now') ORDER BY id DESC LIMIT 1", [phone, code]);
     if (!sms) return res.status(401).json({ error: '验证码错误或已过期' });
-    run('UPDATE sms_codes SET used=1 WHERE id=?', [sms.id]);
+    await runAsync('UPDATE sms_codes SET used=1 WHERE id=?', [sms.id]);
 
-    // 更新设备绑定
     if (device_fp) {
-      run('UPDATE users SET device_token=? WHERE id=?', [device_fp, user.id]);
+      await runAsync('UPDATE users SET device_token=? WHERE id=?', [device_fp, user.id]);
     }
 
-    // 滥用检测
-    const abuse = checkAbuseAndRecord(db, user, device_fp, req.ip);
+    const abuse = checkAbuseAndRecord(user, device_fp, req.ip);
     if (abuse.banned) return res.json({ banned: true, message: '账号异常，已临时封禁，请联系客服MCTMilk解封' });
 
     return respondSuccess(user, res);
   }
 
-  // 情况2：纯密码登录
   if (password) {
     if (!user.password_hash || !bcrypt.compareSync(password, user.password_hash)) {
       return res.status(401).json({ error: '手机号或密码错误' });
     }
 
-    // 设备指纹不匹配（换设备了）
     if (device_fp && user.device_token && device_fp !== user.device_token) {
       return res.json({ needSmsCode: true, message: '检测到您使用了新设备，请输入短信验证码完成登录' });
     }
 
-    // 滥用检测
-    const abuse = checkAbuseAndRecord(db, user, device_fp, req.ip);
+    const abuse = checkAbuseAndRecord(user, device_fp, req.ip);
     if (abuse.banned) return res.json({ banned: true, message: '账号异常，已临时封禁，请联系客服MCTMilk解封' });
 
-    // 更新 device_token（新设备第一次密码登录）
     if (device_fp && !user.device_token) {
-      run('UPDATE users SET device_token=? WHERE id=?', [device_fp, user.id]);
+      await runAsync('UPDATE users SET device_token=? WHERE id=?', [device_fp, user.id]);
     }
 
     return respondSuccess(user, res);
@@ -206,7 +192,7 @@ router.post('/forgot-password', async (req, res) => {
   if (!phone) return res.status(400).json({ error: '请输入手机号' });
   if (!/^1[3-9]\d{9}$/.test(phone)) return res.status(400).json({ error: '手机号格式不正确' });
 
-    const user = get('SELECT id FROM users WHERE phone=?', [phone]);
+  const user = await getAsync('SELECT id FROM users WHERE phone=?', [phone]);
   if (!user) return res.json({ message: '如果该手机号已注册，验证码已发送。' });
   res.json({ message: '验证码已发送，请查收短信。', needVerify: true });
 });
@@ -218,16 +204,15 @@ router.post('/reset-password', async (req, res) => {
   if (!/^1[3-9]\d{9}$/.test(phone)) return res.status(400).json({ error: '手机号格式不正确' });
   if (password.length < 6) return res.status(400).json({ error: '密码至少6位' });
 
-    const smsRecord = get("SELECT * FROM sms_codes WHERE phone=? AND code=? AND purpose='resetpwd' AND used=0 AND expires_at>datetime('now') ORDER BY id DESC LIMIT 1", [phone, code]);
+  const smsRecord = await getAsync("SELECT * FROM sms_codes WHERE phone=? AND code=? AND purpose='resetpwd' AND used=0 AND expires_at>datetime('now') ORDER BY id DESC LIMIT 1", [phone, code]);
   if (!smsRecord) return res.status(400).json({ error: '验证码错误或已过期' });
-  run('UPDATE sms_codes SET used=1 WHERE id=?', [smsRecord.id]);
+  await runAsync('UPDATE sms_codes SET used=1 WHERE id=?', [smsRecord.id]);
 
-  const user = get('SELECT id FROM users WHERE phone=?', [phone]);
+  const user = await getAsync('SELECT id FROM users WHERE phone=?', [phone]);
   if (!user) return res.status(404).json({ error: '用户不存在' });
 
   const hash = await bcrypt.hash(password, 10);
-  // 重置密码后清除 device_token，下次登录任何设备都需验证码重新绑定
-  run('UPDATE users SET password_hash=?, device_token=NULL, must_change_password=0 WHERE id=?', [hash, user.id]);
+  await runAsync('UPDATE users SET password_hash=?, device_token=NULL, must_change_password=0 WHERE id=?', [hash, user.id]);
 
   res.json({ message: '密码重置成功，请使用手机号+密码登录' });
 });

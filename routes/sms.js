@@ -28,7 +28,7 @@ function checkSmsRateLimit(phone, purpose, isLifetime = false) {
     { label: '24小时内', limit: isLifetime ? 30 : 15, hours: 24 },
   ];
   for (const w of windows) {
-    const count = get(
+    const count = await getAsync(
       `SELECT COUNT(*) as c FROM sms_codes WHERE phone=? AND purpose=? AND created_at > datetime('now','-${w.hours} hours')`,
       [phone, purpose]
     )?.c || 0;
@@ -51,14 +51,14 @@ router.post('/send-code', async (req, res) => {
   // 频率限制
   let isLifetime = false;
   if (purpose === 'login') {
-    const user = get('SELECT lifetime FROM users WHERE phone=?', [phone]);
+    const user = await getAsync('SELECT lifetime FROM users WHERE phone=?', [phone]);
     isLifetime = user?.lifetime === 1;
   }
   const check = checkSmsRateLimit(phone, purpose, isLifetime);
   if (!check.allowed) return res.json({ success: false, error: check.message });
 
   // 60秒内防刷
-  const recent = get(
+  const recent = await getAsync(
     "SELECT id FROM sms_codes WHERE phone=? AND purpose=? AND created_at>datetime('now','-60 seconds') AND used=0",
     [phone, purpose]
   );
@@ -67,7 +67,7 @@ router.post('/send-code', async (req, res) => {
   const code = genCode();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-  await run('INSERT INTO sms_codes (phone, code, purpose, expires_at) VALUES (?,?,?,?)',
+  await await runAsync('INSERT INTO sms_codes (phone, code, purpose, expires_at) VALUES (?,?,?,?)',
     [phone, code, purpose, expiresAt]);
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -106,13 +106,13 @@ router.post('/verify-code', async (req, res) => {
   const { phone, code, purpose } = req.body;
   if (!phone || !code) return res.status(400).json({ error: '手机号和验证码不能为空' });
 
-  const record = get(
+  const record = await getAsync(
     "SELECT * FROM sms_codes WHERE phone=? AND code=? AND purpose=? AND used=0 AND expires_at>datetime('now') ORDER BY id DESC LIMIT 1",
     [phone, code, purpose]
   );
   if (!record) return res.status(400).json({ error: '验证码错误或已过期' });
 
-  await run('UPDATE sms_codes SET used=1 WHERE id=?', [record.id]);
+  await await runAsync('UPDATE sms_codes SET used=1 WHERE id=?', [record.id]);
   res.json({ success: true });
 });
 

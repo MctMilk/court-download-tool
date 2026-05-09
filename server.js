@@ -222,9 +222,15 @@ function bufferToBase64(buffer) {
 
 const PORT = process.env.PORT || 3000;
 
-// 启动时初始化数据库
+// 启动时初始化数据库（必须在 listen 之前完成）
 async function start() {
-  await getDb();
+  try {
+    await getDb();
+    console.log('数据库初始化完成');
+  } catch (err) {
+    console.error('数据库初始化失败:', err.message);
+    process.exit(1);
+  }
   app.listen(PORT, () => {
     console.log(`法院文书下载工具已启动: http://localhost:${PORT}`);
   });

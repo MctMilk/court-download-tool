@@ -13,7 +13,7 @@ function extractCaseNumber(content) {
 
 // ─── 获取历史记录列表 ──────────────────────────────────────────────
 router.get('/', authenticate, async (req, res) => {
-  const rows = get.all('SELECT * FROM sms_history WHERE user_id=? ORDER BY created_at DESC LIMIT 50', req.user.userId);
+  const rows = allAsync('SELECT * FROM sms_history WHERE user_id=? ORDER BY created_at DESC LIMIT 50', req.user.userId);
   res.json({
     history: rows.map(r => ({
       id: r.id,
@@ -32,7 +32,7 @@ router.post('/', authenticate, (req, res) => {
   if (!content) return res.status(400).json({ error: '内容不能为空' });
 
   const case_number = extractCaseNumber(content);
-  run('INSERT INTO sms_history (user_id, content, params, court, case_number, doc_count) VALUES (?,?,?,?,?,?)', [req.user.userId,
+  await runAsync('INSERT INTO sms_history (user_id, content, params, court, case_number, doc_count) VALUES (?,?,?,?,?,?)', [req.user.userId,
     content,
     JSON.stringify(params || {}),
     court || '',
@@ -44,9 +44,9 @@ router.post('/', authenticate, (req, res) => {
 
 // ─── 删除历史记录 ────────────────────────────────────────────────
 router.delete('/:id', authenticate, async (req, res) => {
-  const row = get('SELECT id FROM sms_history WHERE id=? AND user_id=?', [req.params.id, req.user.userId]);
+  const row = await getAsync('SELECT id FROM sms_history WHERE id=? AND user_id=?', [req.params.id, req.user.userId]);
   if (!row) return res.status(404).json({ error: '记录不存在' });
-  run('DELETE FROM sms_history WHERE id=?', [req.params.id]);
+  await runAsync('DELETE FROM sms_history WHERE id=?', [req.params.id]);
   res.json({ success: true });
 });
 

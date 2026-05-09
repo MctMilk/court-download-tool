@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { get, run, all } = require('../db');
+const { get, run, all, getAsync, runAsync, allAsync } = require('../db');
 const { authenticate, isPaidUser } = require('../middleware/auth');
 
 const router = express.Router();
@@ -48,7 +48,7 @@ function getOrCreateInviteCode(userId) {
 // 获取当前用户信息
 router.get('/me', authenticate, async (req, res) => {
   try {
-        const user = get('SELECT id, username, phone, is_paid, lifetime, balance, paid_expires_at, must_change_password, created_at FROM users WHERE id = ?', [req.user.userId]);
+        const user = await getAsync('SELECT id, username, phone, is_paid, lifetime, balance, paid_expires_at, must_change_password, created_at FROM users WHERE id = ?', [req.user.userId]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     const userIsPaid = isPaidUser(user);
@@ -75,7 +75,7 @@ router.post('/change-password', authenticate, async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: '新密码至少6位' });
 
-    const user = get('SELECT * FROM users WHERE id = ?', [req.user.userId]);
+    const user = await getAsync('SELECT * FROM users WHERE id = ?', [req.user.userId]);
   if (!user) return res.status(404).json({ error: '用户不存在' });
 
   // 自愿改密（must_change_password=0）必须验证旧密码；强制改密（must_change_password=1）跳过验证
@@ -87,7 +87,7 @@ router.post('/change-password', authenticate, async (req, res) => {
   }
 
   const hash = bcrypt.hashSync(newPassword, 10);
-  run('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', [hash, user.id]);
+  await runAsync('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?', [hash, user.id]);
   res.json({ message: '密码修改成功' });
 });
 
@@ -114,11 +114,11 @@ router.post('/recharge/confirm', authenticate, async (req, res) => {
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
 
   const { price, months: addMonths } = calcRecharge(type, months);
-    const user = get('SELECT * FROM users WHERE id = ?', [req.user.userId]);
+    const user = await getAsync('SELECT * FROM users WHERE id = ?', [req.user.userId]);
   if (!user) return res.status(404).json({ error: '用户不存在' });
 
   const newExpires = calcExpiresAt(user.paid_expires_at, addMonths);
-  run("UPDATE users SET balance = balance + ?, recharged_at = datetime('now', '+8 hours'), paid_expires_at = ? WHERE id = ?", [price, newExpires, user.id]);
+  await runAsync("UPDATE users SET balance = balance + ?, recharged_at = datetime('now', '+8 hours'), paid_expires_at = ? WHERE id = ?", [price, newExpires, user.id]);
 
   res.json({ message: `充值成功，到期时间：${newExpires}` });
 });
@@ -131,11 +131,11 @@ router.post('/admin/set-paid', async (req, res) => {
   if (!phone) return res.status(400).json({ error: '缺少手机号' });
 
   try {
-        const user = get('SELECT id, username FROM users WHERE phone = ?', [phone]);
+        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     if (isPaid) {
-      run("UPDATE users SET lifetime = 1, paid_expires_at = '9999-12-31 23:59:59' WHERE id = ?", [user.id]);
+      await runAsync("UPDATE users SET lifetime = 1, paid_expires_at = '9999-12-31 23:59:59' WHERE id = ?", [user.id]);
       res.json({ message: `已为 ${user.username || phone} 开通终身会员` });
     } else {
       res.json({ needRefund: true, phone, username: user.username || phone });
@@ -153,14 +153,14 @@ router.post('/admin/set-lifetime', async (req, res) => {
   if (!phone) return res.status(400).json({ error: '缺少手机号' });
 
   try {
-        const user = get('SELECT id, username FROM users WHERE phone = ?', [phone]);
+        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     if (lifetime) {
-      run("UPDATE users SET lifetime = 1, paid_expires_at = '9999-12-31 23:59:59' WHERE id = ?", [user.id]);
+      await runAsync("UPDATE users SET lifetime = 1, paid_expires_at = '9999-12-31 23:59:59' WHERE id = ?", [user.id]);
       res.json({ message: `已为 ${user.username || phone} 开通终身会员` });
     } else {
-      run('UPDATE users SET lifetime = 0, paid_expires_at = NULL WHERE id = ?', [user.id]);
+      await runAsync('UPDATE users SET lifetime = 0, paid_expires_at = NULL WHERE id = ?', [user.id]);
       res.json({ message: `已取消 ${user.username || phone} 的终身会员资格` });
     }
   } catch (err) {
@@ -176,13 +176,13 @@ router.post('/admin/confirm-refund', async (req, res) => {
   if (!refund_amount || !refund_time || !refund_reason) return res.status(400).json({ error: '退款金额、时间和理由不能为空' });
 
   try {
-        const user = get('SELECT id, username FROM users WHERE phone = ?', [phone]);
+        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
-    const refundResult = run('INSERT INTO refunds (user_id, refund_amount, refund_time, refund_reason, refund_proof) VALUES (?, ?, ?, ?, ?)', [user.id, refund_amount, refund_time, refund_reason, refund_proof || null]);
+    const refundResult = await runAsync('INSERT INTO refunds (user_id, refund_amount, refund_time, refund_reason, refund_proof) VALUES (?, ?, ?, ?, ?)', [user.id, refund_amount, refund_time, refund_reason, refund_proof || null]);
     const refundId = refundResult.lastInsertRowid;
-    run('UPDATE users SET balance = balance - ?, lifetime = 0 WHERE id = ?', [refund_amount, user.id]);
-    run("INSERT INTO balance_log (user_id, amount, type, description, refund_id) VALUES (?, ?, '退款', ?, ?)", [user.id, -parseFloat(refund_amount), '退费扣除：' + refund_reason, refundId]);
+    await runAsync('UPDATE users SET balance = balance - ?, lifetime = 0 WHERE id = ?', [refund_amount, user.id]);
+    await runAsync("INSERT INTO balance_log (user_id, amount, type, description, refund_id) VALUES (?, ?, '退款', ?, ?)", [user.id, -parseFloat(refund_amount), '退费扣除：' + refund_reason, refundId]);
 
     res.json({ message: `退款记录已保存，${user.username || phone} 的付费资格已取消` });
   } catch (err) {
@@ -200,11 +200,11 @@ router.post('/admin/add-user', async (req, res) => {
   if (!/^1[3-9]\d{9}$/.test(phone)) return res.status(400).json({ error: '手机号格式不正确' });
 
   try {
-        const existing = get('SELECT id FROM users WHERE phone = ?', [phone]);
+        const existing = await getAsync('SELECT id FROM users WHERE phone = ?', [phone]);
     if (existing) return res.status(409).json({ error: '该手机号已注册' });
 
     const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
-    run('INSERT INTO users (username, phone, email, password_hash, must_change_password) VALUES (?, ?, NULL, ?, 1)', [username.trim(), phone, hash]);
+    await runAsync('INSERT INTO users (username, phone, email, password_hash, must_change_password) VALUES (?, ?, NULL, ?, 1)', [username.trim(), phone, hash]);
 
     res.json({ message: `用户 ${username} 创建成功，初始密码：${DEFAULT_PASSWORD}，下次登录必须修改密码` });
   } catch (err) {
@@ -220,11 +220,11 @@ router.post('/admin/reset-password', async (req, res) => {
   if (!phone) return res.status(400).json({ error: '缺少手机号' });
 
   try {
-        const user = get('SELECT id, username FROM users WHERE phone = ?', [phone]);
+        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
-    run('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?', [hash, user.id]);
+    await runAsync('UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?', [hash, user.id]);
     res.json({ message: `密码已重置为 ${DEFAULT_PASSWORD}，用户下次登录必须修改密码` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -239,10 +239,10 @@ router.post('/admin/set-free', async (req, res) => {
   if (!phone) return res.status(400).json({ error: '缺少手机号' });
 
   try {
-        const user = get('SELECT id, username FROM users WHERE phone = ?', [phone]);
+        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
-    run("UPDATE users SET lifetime = 0, is_paid = 0, paid_expires_at = NULL WHERE id = ?", [user.id]);
+    await runAsync("UPDATE users SET lifetime = 0, is_paid = 0, paid_expires_at = NULL WHERE id = ?", [user.id]);
     res.json({ message: `${user.username || phone} 已设为免费用户` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -260,7 +260,7 @@ router.post('/admin/adjust-expiry', async (req, res) => {
   if (!['month', 'year'].includes(unit)) return res.status(400).json({ error: '单位只能是月或年' });
 
   try {
-        const user = get('SELECT id, username, lifetime FROM users WHERE phone = ?', [phone]);
+        const user = await getAsync('SELECT id, username, lifetime FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
     if (user.lifetime === 1) return res.status(403).json({ error: '该用户为终身会员，无法调整期限' });
 
@@ -269,7 +269,7 @@ router.post('/admin/adjust-expiry', async (req, res) => {
     baseDate.setMonth(baseDate.getMonth() + addMonths);
     const newExpires = baseDate.toISOString().replace('T', ' ').slice(0, 19);
 
-    run("UPDATE users SET lifetime = 0, is_paid = 1, paid_expires_at = ? WHERE id = ?", [newExpires, user.id]);
+    await runAsync("UPDATE users SET lifetime = 0, is_paid = 1, paid_expires_at = ? WHERE id = ?", [newExpires, user.id]);
 
     res.json({ message: `到期时间已调整为 ${newExpires}（${user.username || phone}）` });
   } catch (err) {
@@ -285,7 +285,7 @@ router.post('/admin/delete', async (req, res) => {
   if (!phone) return res.status(400).json({ error: '缺少手机号' });
 
   try {
-        const user = get('SELECT * FROM users WHERE phone = ?', [phone]);
+        const user = await getAsync('SELECT * FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     if (user.lifetime === 1) return res.status(403).json({ error: '该用户为终身会员，禁止删除' });
@@ -296,8 +296,8 @@ router.post('/admin/delete', async (req, res) => {
       return res.status(403).json({ error: `该用户尚未到期（${user.paid_expires_at}），禁止删除` });
     }
 
-    run('DELETE FROM usage_log WHERE user_id = ?', [user.id]);
-    run('DELETE FROM users WHERE id = ?', [user.id]);
+    await runAsync('DELETE FROM usage_log WHERE user_id = ?', [user.id]);
+    await runAsync('DELETE FROM users WHERE id = ?', [user.id]);
     res.json({ message: '删除成功' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -312,14 +312,14 @@ router.get('/admin/balance-log', async (req, res) => {
   if (!phone) return res.status(400).json({ error: '缺少手机号' });
 
   try {
-        const user = get('SELECT id, balance FROM users WHERE phone = ?', [phone]);
+        const user = await getAsync('SELECT id, balance FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     const PAGE_SIZE = 20;
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
-    const total = get('SELECT COUNT(*) as c FROM balance_log WHERE user_id = ?', [user.id])?.c || 0;
+    const total = (await getAsync(SELECT COUNT(*) as c FROM balance_log WHERE user_id = ?', [user.id])?.c || 0;
     // 联查 refunds 表取凭证图片
-    const logs = all(`
+    const logs = await allAsync(`
       SELECT bl.*, r.refund_proof
       FROM balance_log bl
       LEFT JOIN refunds r ON bl.refund_id = r.id
@@ -363,15 +363,15 @@ router.get('/invite/status', authenticate, async (req, res) => {
         const userId = req.user.userId;
     const inviteCode = getOrCreateInviteCode(userId);
 
-    const total = get('SELECT COUNT(*) as c FROM invite_relations WHERE inviter_id=?', [userId])?.c || 0;
+    const total = (await getAsync("SELECT COUNT(*) as c FROM invite_relations WHERE inviter_id=?", [userId]))?.c || 0;
 
-    const paid = get(`
+    const paid = (await getAsync(`
       SELECT COUNT(*) as c FROM invite_relations ir
       JOIN users u ON ir.invitee_id = u.id
       WHERE ir.inviter_id=? AND (u.lifetime=1 OR (u.is_paid=1 AND u.paid_expires_at>datetime('now')))
-    `, [userId])?.c || 0;
+    `, [userId]))?.c || 0;
 
-    const rewards = all('SELECT * FROM invite_rewards WHERE user_id=? ORDER BY id DESC', [userId]);
+    const rewards = await allAsync('SELECT * FROM invite_rewards WHERE user_id=? ORDER BY id DESC', [userId]);
 
     res.json({
       inviteCode,
@@ -395,8 +395,8 @@ router.get('/invite/invitees', authenticate, async (req, res) => {
         const userId = req.user.userId;
     const PAGE_SIZE = 20;
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
-    const total = get('SELECT COUNT(*) as c FROM invite_relations WHERE inviter_id=?', [userId])?.c || 0;
-    const rows = all(`
+    const total = (await getAsync("SELECT COUNT(*) as c FROM invite_relations WHERE inviter_id=?", [userId]))?.c || 0;
+    const rows = await allAsync(`
       SELECT u.username, u.lifetime, u.is_paid, u.paid_expires_at, ir.created_at as invited_at
       FROM invite_relations ir
       JOIN users u ON ir.invitee_id = u.id

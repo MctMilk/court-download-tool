@@ -156,6 +156,9 @@ function getDb() {
       for (const sql of migrations) {
         try { db.run(sql); } catch {}
       }
+      // 迁移后必须保存，否则重启后列又丢失
+      const data = db.export();
+      fs.writeFileSync(DB_PATH, Buffer.from(data));
       return db;
     })();
   }
@@ -207,4 +210,18 @@ process.on('exit', () => saveDb());
 process.on('SIGINT', () => { saveDb(); process.exit(); });
 process.on('SIGTERM', () => { saveDb(); process.exit(); });
 
-module.exports = { getDb, getDbSync, run, get, all, closeDb };
+// async 版：自动等待数据库初始化，适合 async 路由使用
+async function getAsync(sql, params = []) {
+  await getDb();
+  return get(sql, params);
+}
+async function runAsync(sql, params = []) {
+  await getDb();
+  return run(sql, params);
+}
+async function allAsync(sql, params = []) {
+  await getDb();
+  return all(sql, params);
+}
+
+module.exports = { getDb, getDbSync, run, get, all, closeDb, getAsync, runAsync, allAsync };

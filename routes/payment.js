@@ -46,7 +46,7 @@ router.post('/webhook', (req, res) => {
 router.get('/order/:tradeNo', authenticate, (req, res) => {
   const { tradeNo } = req.params;
   try {
-    const record = get('SELECT * FROM payment_records WHERE trade_no = ? AND user_id = ?', [tradeNo, req.user.userId]);
+    const record = await getAsync('SELECT * FROM payment_records WHERE trade_no = ? AND user_id = ?', [tradeNo, req.user.userId]);
 
     if (!record) {
       return res.status(404).json({ error: '订单不存在' });
