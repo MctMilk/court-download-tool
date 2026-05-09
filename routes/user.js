@@ -125,13 +125,15 @@ router.post('/recharge/confirm', authenticate, async (req, res) => {
 
 // 管理员手动开通/取消付费（保留兼容，新调用改用 /admin/set-lifetime）
 router.post('/admin/set-paid', async (req, res) => {
-  const { phone, isPaid, adminKey } = req.body;
+  const { userId, phone, isPaid, adminKey } = req.body;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
-  if (!phone) return res.status(400).json({ error: '缺少手机号' });
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
-        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
+    const user = userId
+      ? await getAsync('SELECT id, username, phone FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT id, username, phone FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     if (isPaid) {
@@ -147,13 +149,15 @@ router.post('/admin/set-paid', async (req, res) => {
 
 // 管理员切换终身会员状态
 router.post('/admin/set-lifetime', async (req, res) => {
-  const { phone, lifetime, adminKey } = req.body;
+  const { userId, phone, lifetime, adminKey } = req.body;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
-  if (!phone) return res.status(400).json({ error: '缺少手机号' });
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
-        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
+    const user = userId
+      ? await getAsync('SELECT id, username, phone FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT id, username, phone FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     if (lifetime) {
@@ -170,13 +174,15 @@ router.post('/admin/set-lifetime', async (req, res) => {
 
 // 管理员确认退款（取消付费）
 router.post('/admin/confirm-refund', async (req, res) => {
-  const { phone, refund_amount, refund_time, refund_reason, refund_proof, adminKey } = req.body;
+  const { userId, phone, refund_amount, refund_time, refund_reason, refund_proof, adminKey } = req.body;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
   if (!refund_amount || !refund_time || !refund_reason) return res.status(400).json({ error: '退款金额、时间和理由不能为空' });
 
   try {
-        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
+    const user = userId
+      ? await getAsync('SELECT id, username, phone FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT id, username, phone FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     const refundResult = await runAsync('INSERT INTO refunds (user_id, refund_amount, refund_time, refund_reason, refund_proof) VALUES (?, ?, ?, ?, ?)', [user.id, refund_amount, refund_time, refund_reason, refund_proof || null]);
@@ -214,13 +220,15 @@ router.post('/admin/add-user', async (req, res) => {
 
 // 管理员重置用户密码（设为默认密码，强制改密）
 router.post('/admin/reset-password', async (req, res) => {
-  const { phone, adminKey } = req.body;
+  const { userId, phone, adminKey } = req.body;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
-  if (!phone) return res.status(400).json({ error: '缺少手机号' });
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
-        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
+    const user = userId
+      ? await getAsync('SELECT id, username, phone FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT id, username, phone FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
@@ -233,13 +241,15 @@ router.post('/admin/reset-password', async (req, res) => {
 
 // 管理员将用户设为免费会员
 router.post('/admin/set-free', async (req, res) => {
-  const { phone, adminKey } = req.body;
+  const { userId, phone, adminKey } = req.body;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
-  if (!phone) return res.status(400).json({ error: '缺少手机号' });
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
-        const user = await getAsync('SELECT id, username FROM users WHERE phone = ?', [phone]);
+    const user = userId
+      ? await getAsync('SELECT id, username, phone FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT id, username, phone FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     await runAsync("UPDATE users SET lifetime = 0, is_paid = 0, paid_expires_at = NULL WHERE id = ?", [user.id]);
@@ -251,16 +261,18 @@ router.post('/admin/set-free', async (req, res) => {
 
 // 管理员调整会员到期时间
 router.post('/admin/adjust-expiry', async (req, res) => {
-  const { phone, start_date, quantity, unit, adminKey } = req.body;
+  const { userId, phone, start_date, quantity, unit, adminKey } = req.body;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
-  if (!phone) return res.status(400).json({ error: '缺少手机号' });
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
   if (!start_date) return res.status(400).json({ error: '请选择起始日期' });
   if (!quantity || quantity <= 0) return res.status(400).json({ error: '请输入正确的时长' });
   if (!['month', 'year'].includes(unit)) return res.status(400).json({ error: '单位只能是月或年' });
 
   try {
-        const user = await getAsync('SELECT id, username, lifetime FROM users WHERE phone = ?', [phone]);
+    const user = userId
+      ? await getAsync('SELECT id, username, phone, lifetime FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT id, username, phone, lifetime FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
     if (user.lifetime === 1) return res.status(403).json({ error: '该用户为终身会员，无法调整期限' });
 
@@ -279,13 +291,15 @@ router.post('/admin/adjust-expiry', async (req, res) => {
 
 // 管理员删除用户（带保护：终身用户或有订阅期禁止删除）
 router.post('/admin/delete', async (req, res) => {
-  const { phone, adminKey } = req.body;
+  const { userId, phone, adminKey } = req.body;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
-  if (!phone) return res.status(400).json({ error: '缺少手机号' });
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
-        const user = await getAsync('SELECT * FROM users WHERE phone = ?', [phone]);
+    const user = userId
+      ? await getAsync('SELECT * FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT * FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     if (user.lifetime === 1) return res.status(403).json({ error: '该用户为终身会员，禁止删除' });
@@ -306,18 +320,20 @@ router.post('/admin/delete', async (req, res) => {
 
 // 管理员获取用户余额流水
 router.get('/admin/balance-log', async (req, res) => {
-  const { phone, page = 1 } = req.query;
+  const { userId, phone, page = 1 } = req.query;
   const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
   if (req.headers['x-admin-key'] !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
-  if (!phone) return res.status(400).json({ error: '缺少手机号' });
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
-        const user = await getAsync('SELECT id, balance FROM users WHERE phone = ?', [phone]);
+    const user = userId
+      ? await getAsync('SELECT id, balance, phone FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT id, balance, phone FROM users WHERE phone = ?', [phone]);
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     const PAGE_SIZE = 20;
     const offset = (parseInt(page) - 1) * PAGE_SIZE;
-    const total = (await getAsync(SELECT COUNT(*) as c FROM balance_log WHERE user_id = ?', [user.id])?.c || 0;
+    const total = (await getAsync("SELECT COUNT(*) as c FROM balance_log WHERE user_id = ?", [user.id]))?.c || 0;
     // 联查 refunds 表取凭证图片
     const logs = await allAsync(`
       SELECT bl.*, r.refund_proof
@@ -329,6 +345,26 @@ router.get('/admin/balance-log', async (req, res) => {
     `);
 
     res.json({ balance: user.balance, logs, total, page: parseInt(page), pageSize: PAGE_SIZE });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 管理员修改用户手机号
+router.post('/admin/update-phone', async (req, res) => {
+  const { userId, phone, adminKey } = req.body;
+  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
+  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  if (!userId) return res.status(400).json({ error: '缺少用户ID' });
+  if (!phone || !/^1[3-9]\d{9}$/.test(phone)) return res.status(400).json({ error: '手机号格式不正确' });
+
+  try {
+    const user = await getAsync('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    const existing = await getAsync('SELECT id FROM users WHERE phone = ? AND id != ?', [phone, userId]);
+    if (existing) return res.status(409).json({ error: '该手机号已被其他用户使用' });
+    await runAsync('UPDATE users SET phone = ? WHERE id = ?', [phone, userId]);
+    res.json({ message: '手机号已更新为 ' + phone });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
