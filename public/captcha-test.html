@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>数学验证码测试页</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 620px; margin: 40px auto; padding: 0 20px; background: #f9fafb; }
+  h1 { color: #1f2937; font-size: 22px; }
+  h2 { color: #374151; font-size: 16px; margin-top: 28px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin: 16px 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .row { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+  label { min-width: 80px; color: #4b5563; font-size: 14px; }
+  input { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+  input[type=number] { width: 100px; }
+  button { padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; white-space: nowrap; }
+  button:hover { background: #1d4ed8; }
+  button:disabled { background: #9ca3af; cursor: not-allowed; }
+  button.secondary { background: #6b7280; }
+  button.secondary:hover { background: #4b5563; }
+  button.green { background: #059669; }
+  button.green:hover { background: #047857; }
+  .img-captcha { border: 2px solid #e5e7eb; border-radius: 8px; max-height: 80px; background: #f9fafb; cursor: pointer; }
+  .result { margin-top: 12px; padding: 12px; border-radius: 6px; font-size: 14px; word-break: break-all; }
+  .result.ok { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+  .result.err { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+  .result.info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+  .result.warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  #debugLog { background: #1f2937; color: #d1fae5; padding: 12px; border-radius: 6px; font-size: 12px; max-height: 220px; overflow-y: auto; font-family: monospace; }
+  .flex { display: flex; gap: 8px; align-items: center; }
+  .flex input { flex: 1; }
+  .tip { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #0369a1; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<h1>数学验证码 — 独立测试页</h1>
+
+<!-- Step 1: 纯测试图形验证码 -->
+<div class="card">
+  <h2>Step 1 — 单独测试图形验证码（不真实发短信）</h2>
+  <div class="tip">获取验证码图片 → 输入答案 → 测试验证流程，不触发任何频率限制</div>
+  <div class="row">
+    <input type="text" id="s1Phone" value="13900001111" placeholder="手机号" style="width:130px">
+    <select id="s1Purpose" style="padding:8px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">
+      <option value="register">注册</option>
+      <option value="resetpwd">找回密码</option>
+    </select>
+    <button id="btnS1Captcha" onclick="doS1Get()">获取数学题图片</button>
+  </div>
+  <div id="s1Area" style="margin-top:14px; display:none">
+    <div style="font-size:14px;margin-bottom:8px;color:#374151">请计算结果并填写答案：</div>
+    <div class="flex" style="margin-bottom:10px">
+      <img id="s1Img" class="img-captcha" style="max-width:250px;height:80px;object-fit:contain" onclick="doS1Get()" title="看不清？点击换一题">
+      <button class="secondary" onclick="doS1Get()">换一题</button>
+    </div>
+    <div class="flex">
+      <input type="number" id="s1Answer" placeholder="输入计算结果" style="flex:1" onkeydown="if(event.key==='Enter')doS1Submit()">
+      <button id="btnS1Submit" onclick="doS1Submit()">提交验证</button>
+    </div>
+    <div id="s1Msg" style="margin-top:8px;font-size:13px;color:#e63946;min-height:18px"></div>
+  </div>
+</div>
+
+<!-- Step 2: 一键触发 captcha -->
+<div class="card">
+  <h2>Step 2 — 一键测试 captcha 触发（全自动）</h2>
+  <div class="tip">点按钮 → 自动灌假指纹（模拟同IP多设备） → 自动弹出数学题 → 答对后短信自动发出</div>
+  <div class="row">
+    <input type="text" id="s2Phone" value="13900002222" placeholder="手机号" style="width:130px">
+    <select id="s2Purpose" style="padding:8px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">
+      <option value="register">注册</option>
+      <option value="resetpwd">找回密码</option>
+    </select>
+    <button id="btnS2Trigger" class="green" onclick="doS2Trigger()">🎯 一键触发图形验证码</button>
+  </div>
+  <div id="s2Result" class="result warn" style="display:none"></div>
+</div>
+
+<!-- Step 3: 真实发送 + 按钮倒计时 -->
+<div class="card">
+  <h2>Step 3 — 真实发送模拟（测试按钮倒计时）</h2>
+  <div class="tip">真实调用 API，每次发送间隔建议 65 秒以上（或换手机号），用于测试按钮60秒倒计时效果</div>
+  <div class="row">
+    <input type="text" id="s3Phone" value="13900003333" placeholder="手机号" style="width:130px">
+    <input type="text" id="s3Fp" value="real_device_001" placeholder="设备指纹" style="flex:1">
+    <button id="btnS3Send" onclick="doS3Send()">发验证码（真实）</button>
+  </div>
+  <div id="s3Result" class="result info" style="display:none"></div>
+</div>
+
+<div class="card">
+  <h2>调试日志</h2>
+  <div id="debugLog">等待操作...</div>
+</div>
+
+<script>
+const API = '/wenshu/api/sms';
+
+let currentCaptchaId = '';
+let currentPhone = '';
+let currentPurpose = '';
+let pendingSend = null;
+
+// ─── 工具函数 ──────────────────────────────────────────────
+function log(msg, type='info') {
+  const el = document.getElementById('debugLog');
+  const ts = new Date().toLocaleTimeString();
+  const color = { info:'#93c5fd', ok:'#6ee7b7', err:'#fca5a5', warn:'#fde68a' }[type] || '#9ca3af';
+  el.innerHTML += `<div style="color:${color}">[${ts}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ─── Step 1: 纯 captcha 测试 ───────────────────────────────
+async function doS1Get() {
+  const phone = document.getElementById('s1Phone').value.trim();
+  const purpose = document.getElementById('s1Purpose').value;
+  if (!phone || !/^1[3-9]\d{9}$/.test(phone)) { alert('请输入正确手机号'); return; }
+  currentPhone = phone;
+  currentPurpose = purpose;
+  const btn = document.getElementById('btnS1Captcha');
+  btn.disabled = true; btn.textContent = '加载中...';
+  try {
+    const r = await fetch(`${API}/captcha`);
+    const d = await r.json();
+    if (d.captchaId) {
+      currentCaptchaId = d.captchaId;
+      document.getElementById('s1Img').src = d.image;
+      document.getElementById('s1Area').style.display = 'block';
+      document.getElementById('s1Answer').value = '';
+      document.getElementById('s1Msg').textContent = '';
+      document.getElementById('s1Msg').style.color = '#1e40af';
+      document.getElementById('s1Msg').textContent = '验证码已生成，请在下方填写答案';
+      log(`Step1: captcha 获取成功 id=${currentCaptchaId.slice(0,8)}...`, 'ok');
+    } else {
+      log(`Step1: 获取失败 ${JSON.stringify(d)}`, 'err');
+    }
+  } catch(e) {
+    log(`Step1: 网络错误 ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '获取数学题图片';
+  }
+}
+
+async function doS1Submit() {
+  const answer = document.getElementById('s1Answer').value.trim();
+  if (!answer) { document.getElementById('s1Msg').textContent = '请输入答案'; return; }
+  if (!currentCaptchaId) { document.getElementById('s1Msg').textContent = '请先获取验证码'; return; }
+  const btn = document.getElementById('btnS1Submit');
+  btn.disabled = true; btn.textContent = '验证中...';
+  try {
+    log(`Step1: 提交答案=${answer}`);
+    const r = await fetch(`${API}/send-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: currentPhone, purpose: currentPurpose, captchaId: currentCaptchaId, captchaAnswer: answer, deviceFingerprint: 'step1_test_' + Date.now() }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      log(`Step1: 验证通过！短信已发（或频率限制拦截）`, 'ok');
+      document.getElementById('s1Msg').style.color = '#065f46';
+      document.getElementById('s1Msg').textContent = '✓ 验证通过！';
+      currentCaptchaId = '';
+    } else {
+      log(`Step1: ${d.error} (needCaptcha=${d.needCaptcha})`, 'err');
+      document.getElementById('s1Msg').style.color = '#e63946';
+      document.getElementById('s1Msg').textContent = '✗ ' + d.error;
+    }
+  } catch(e) {
+    log(`Step1: 网络错误 ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '提交验证';
+  }
+}
+
+// ─── Step 2: 一键触发 captcha ─────────────────────────────
+async function doS2Trigger() {
+  const phone = document.getElementById('s2Phone').value.trim();
+  const purpose = document.getElementById('s2Purpose').value;
+  if (!phone || !/^1[3-9]\d{9}$/.test(phone)) { alert('请输入正确手机号'); return; }
+  const btn = document.getElementById('btnS2Trigger');
+  const el = document.getElementById('s2Result');
+  btn.disabled = true; btn.textContent = '准备中...';
+
+  try {
+    // 1. 灌入假指纹（让 needCaptcha 返回 true）
+    log(`Step2: 灌入假指纹...`);
+    const seedR = await fetch(`${API}/debug/seed-fingerprints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count: 2 }),
+    });
+    const seedD = await seedR.json();
+    log(`Step2: ${seedD.message}`, 'ok');
+
+    // 2. 调用 send-code（此时 needCaptcha 必定为 true）
+    log(`Step2: 触发 send-code，captcha 即将被要求...`);
+    const sendR = await fetch(`${API}/send-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, purpose, deviceFingerprint: 'trigger_fp_' + Date.now() }),
+    });
+    const sendD = await sendR.json();
+
+    if (sendD.needCaptcha) {
+      log(`Step2: captcha 被触发，弹出数学题！`, 'warn');
+      el.className = 'result warn';
+      el.textContent = '✅ 检测到异常访问，弹出图形验证码，请完成验证';
+      el.style.display = 'block';
+      // 弹出验证码
+      pendingSend = { phone, purpose, deviceFingerprint: 'trigger_fp_' + Date.now() };
+      await openCaptchaForTest(phone, purpose);
+    } else if (sendD.success) {
+      log(`Step2: captcha 未触发（指纹未及时记录），重试一次...`, 'warn');
+      // 再发一次
+      const r2 = await fetch(`${API}/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, purpose, deviceFingerprint: 'trigger_fp2_' + Date.now() }),
+      });
+      const d2 = await r2.json();
+      if (d2.needCaptcha) {
+        el.className = 'result warn';
+        el.textContent = '✅ 图形验证码已弹出，请完成验证';
+        el.style.display = 'block';
+        pendingSend = { phone, purpose, deviceFingerprint: 'trigger_fp2_' + Date.now() };
+        await openCaptchaForTest(phone, purpose);
+      } else {
+        el.className = 'result ok';
+        el.textContent = '⚠️ 发送成功（captcha 未触发，可能为频率限制）';
+        el.style.display = 'block';
+      }
+    } else {
+      log(`Step2: ${sendD.error}`, 'err');
+      el.className = 'result err';
+      el.textContent = '✗ ' + sendD.error;
+      el.style.display = 'block';
+    }
+  } catch(e) {
+    log(`Step2: 网络错误 ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '🎯 一键触发图形验证码';
+  }
+}
+
+async function openCaptchaForTest(phone, purpose) {
+  const r = await fetch(`${API}/captcha`);
+  const d = await r.json();
+  if (d.captchaId) {
+    currentCaptchaId = d.captchaId;
+    currentPhone = phone;
+    currentPurpose = purpose;
+    document.getElementById('s1Img').src = d.image;
+    document.getElementById('s1Area').style.display = 'block';
+    document.getElementById('s1Phone').value = phone;
+    document.getElementById('s1Purpose').value = purpose;
+    document.getElementById('s1Answer').value = '';
+    document.getElementById('s1Msg').style.color = '#92400e';
+    document.getElementById('s1Msg').textContent = '⚠️ 需要完成安全验证！答对后短信自动发出';
+    document.getElementById('s1Area').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 修改提交按钮逻辑：发真实短信
+    document.getElementById('btnS1Submit').onclick = doS2CaptchaSubmit;
+    log(`Step2: captcha 弹窗已显示，等待用户输入答案`, 'ok');
+  }
+}
+
+async function doS2CaptchaSubmit() {
+  const answer = document.getElementById('s1Answer').value.trim();
+  if (!answer) { document.getElementById('s1Msg').textContent = '请输入答案'; return; }
+  if (!currentCaptchaId) { document.getElementById('s1Msg').textContent = '请先获取验证码'; return; }
+  const btn = document.getElementById('btnS1Submit');
+  btn.disabled = true; btn.textContent = '验证中...';
+  try {
+    log(`Step2 captcha: 提交答案=${answer}`);
+    const r = await fetch(`${API}/send-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...pendingSend, captchaId: currentCaptchaId, captchaAnswer: answer }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      log(`Step2: ✅ 图形验证码通过，短信已发送！`, 'ok');
+      document.getElementById('s1Msg').style.color = '#065f46';
+      document.getElementById('s1Msg').textContent = '✅ 验证通过，短信已发送成功！';
+      currentCaptchaId = '';
+      pendingSend = null;
+      // 恢复 btnS1Submit 为原始功能
+      document.getElementById('btnS1Submit').onclick = doS1Submit;
+    } else {
+      log(`Step2 captcha: ${d.error}`, 'err');
+      document.getElementById('s1Msg').style.color = '#e63946';
+      document.getElementById('s1Msg').textContent = '✗ ' + d.error + '，请重新获取';
+    }
+  } catch(e) {
+    log(`Step2 captcha: 网络错误 ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = '提交验证';
+  }
+}
+
+// ─── Step 3: 真实发送 + 倒计时 ────────────────────────────
+let s3Countdown = 0;
+let s3Timer = null;
+
+async function doS3Send() {
+  const phone = document.getElementById('s3Phone').value.trim();
+  const fp = document.getElementById('s3Fp').value.trim();
+  if (!phone || !fp) { alert('请填写手机号和指纹'); return; }
+
+  const btn = document.getElementById('btnS3Send');
+  const el = document.getElementById('s3Result');
+
+  // 倒计时中不允许发送
+  if (s3Countdown > 0) {
+    el.className = 'result warn';
+    el.textContent = `请等待 ${s3Countdown} 秒后再试`;
+    el.style.display = 'block';
+    log(`Step3: 倒计时中，拒绝发送（还剩${s3Countdown}秒）`, 'warn');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = '发送中...';
+  el.style.display = 'none';
+
+  try {
+    log(`Step3: 发送，手机号=${phone}，指纹=${fp}`);
+    const r = await fetch(`${API}/send-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, purpose: 'register', deviceFingerprint: fp }),
+    });
+    const d = await r.json();
+
+    if (d.success) {
+      log(`Step3: 发送成功，开始60秒倒计时`, 'ok');
+      el.className = 'result ok';
+      el.textContent = `✓ 发送成功！按钮即将进入60秒倒计时`;
+      el.style.display = 'block';
+      startS3Countdown();
+    } else if (d.needCaptcha) {
+      log(`Step3: 需要 captcha，弹出验证`, 'warn');
+      el.className = 'result warn';
+      el.textContent = '⚠️ 需要图形验证码，正在弹出...';
+      el.style.display = 'block';
+      pendingSend = { phone, purpose: 'register', deviceFingerprint: fp };
+      await openCaptchaForTest(phone, 'register');
+    } else {
+      // 频率限制 → 倒计时
+      log(`Step3: 频率限制: ${d.error}，启动60秒倒计时`, 'warn');
+      el.className = 'result err';
+      el.textContent = `✗ ${d.error}（按钮进入60秒倒计时）`;
+      el.style.display = 'block';
+      startS3Countdown();
+    }
+  } catch(e) {
+    log(`Step3: 网络错误 ${e.message}`, 'err');
+  }
+  // 注意：不要在 finally 里重置按钮状态！倒计时由 startS3Countdown 统一管理
+}
+
+function startS3Countdown() {
+  s3Countdown = 60;
+  const btn = document.getElementById('btnS3Send');
+  const update = () => {
+    if (s3Countdown <= 0) {
+      clearInterval(s3Timer);
+      s3Timer = null;
+      btn.disabled = false;
+      btn.textContent = '发验证码（真实）';
+      log(`Step3: 倒计时结束，按钮已恢复`, 'ok');
+    } else {
+      btn.disabled = true;
+      btn.textContent = `${s3Countdown}秒后可重发`;
+      s3Countdown--;
+    }
+  };
+  if (s3Timer) clearInterval(s3Timer);
+  update();
+  s3Timer = setInterval(update, 1000);
+}
+</script>
+</body>
+</html>

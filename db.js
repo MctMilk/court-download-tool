@@ -141,6 +141,7 @@ function getDb() {
       // 迁移：添加可能缺失的列
       const migrations = [
         "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN last_activity TEXT",
         "ALTER TABLE users ADD COLUMN lifetime INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN recharged_at TEXT",
         "ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0",
@@ -152,6 +153,7 @@ function getDb() {
         "ALTER TABLE sms_history ADD COLUMN court TEXT",
         "ALTER TABLE sms_history ADD COLUMN case_number TEXT",
         "ALTER TABLE sms_history ADD COLUMN doc_count INTEGER DEFAULT 0",
+        "ALTER TABLE invite_rewards ADD COLUMN level INTEGER DEFAULT 0",
       ];
       for (const sql of migrations) {
         try { db.run(sql); } catch {}
@@ -186,6 +188,69 @@ function getDb() {
         CREATE INDEX IF NOT EXISTS idx_sms_phone ON sms_log(phone);
         CREATE INDEX IF NOT EXISTS idx_sms_ip ON sms_log(ip);
       `);
+
+      // v3.1: 订阅/余额系统
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS paid_periods (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          months INTEGER NOT NULL,
+          period_type TEXT NOT NULL,
+          start_at TEXT NOT NULL,
+          end_at TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now', '+8 hours'))
+        );
+        CREATE TABLE IF NOT EXISTS consumption_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          period_type TEXT NOT NULL,
+          deducted_at TEXT NOT NULL,
+          created_at TEXT DEFAULT (datetime('now', '+8 hours'))
+        );
+      `);
+
+      // v3.2: 新退费公式 — 退款申请表 + 订阅首次记录
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS refund_requests (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          user_phone TEXT,
+          amount REAL NOT NULL,
+          computed_amount REAL,
+          formula_json TEXT,
+          status TEXT DEFAULT 'pending',
+          reviewed_by TEXT,
+          reviewed_at TEXT,
+          reject_reason TEXT,
+          wx_refund_no TEXT,
+          created_at TEXT DEFAULT (datetime('now', '+8 hours'))
+        );
+        CREATE TABLE IF NOT EXISTS subscription_starts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL UNIQUE,
+          started_at TEXT NOT NULL,
+          original_plan_type TEXT,
+          original_amount REAL,
+          created_at TEXT DEFAULT (datetime('now', '+8 hours'))
+        );
+      `);
+
+      // v3.2: users 表新增字段 + 旧表 deprecated 标记
+      const v32Migrations = [
+        "ALTER TABLE users ADD COLUMN subscription_started_at TEXT",
+        "ALTER TABLE users ADD COLUMN balance_computed_at TEXT",
+        "ALTER TABLE consumption_log ADD COLUMN deprecated INTEGER DEFAULT 0",
+        "ALTER TABLE paid_periods ADD COLUMN deprecated INTEGER DEFAULT 0",
+      ];
+      for (const sql of v32Migrations) {
+        try {
+          db.run(sql);
+        } catch (e) {
+          console.error('v3.2 migration error [' + sql.slice(0, 60) + ']:', e.message);
+        }
+      }
 
       // 迁移后必须保存，否则重启后列又丢失
       const savedData = db.export();

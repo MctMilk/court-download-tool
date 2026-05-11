@@ -1,12 +1,13 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { get, run, getAsync, runAsync } = require('../db');
-const { generateToken, isPaidUser } = require('../middleware/auth');
+const { generateToken, isPaidUser, touchLastActivity } = require('../middleware/auth');
 
 const router = express.Router();
 
 // ─── Helpers ────────────────────────────────────────────────────────
 function respondSuccess(user, res) {
+  touchLastActivity(user.id);
   const userIsPaid = isPaidUser(user);
   const token = generateToken({
     userId: user.id, username: user.username, phone: user.phone,
@@ -23,62 +24,74 @@ function respondSuccess(user, res) {
   });
 }
 
-// ─── 邀请奖励核心逻辑（同步，服务器启动后调用）────────────────────
-function checkAndGrantInviteReward(userId) {
-  const user = get('SELECT * FROM users WHERE id=?', [userId]);
-  if (!user) return;
-  if (user.lifetime === 1) return;
+// ─── 邀请奖励核心逻辑 ─────────────────────────────────────────────
+// 奖励级别定义（level 越大越高，防止低级别覆盖高级别）
+const REWARD_LEVELS = [
+  { type: 'monthly',  threshold_reg: 10, threshold_paid: 5,  level: 1, months: 1 },
+  { type: 'monthly2', threshold_reg: 20, threshold_paid: 10, level: 2, months: 1 },
+  { type: 'yearly',  threshold_reg: 999, threshold_paid: 30, level: 3, months: 10 },
+  { type: 'lifetime',threshold_reg: 999, threshold_paid: 100, level: 4, months: 0 },
+];
 
-  const total = get('SELECT COUNT(*) as c FROM invite_relations WHERE inviter_id=?', [userId])?.c || 0;
+// 通用奖励检查逻辑（通过 getFn/runFn 解耦，sync/async 通用）
+function _checkAndGrantInviteReward(inviterId, { getFn, runFn }) {
+  const inviter = getFn('SELECT * FROM users WHERE id=?', [inviterId]);
+  if (!inviter || inviter.lifetime === 1) return;
 
-  const paid = get(`
+  const totalReg = getFn(
+    'SELECT COUNT(*) as c FROM invite_relations WHERE inviter_id=?', [inviterId]
+  )?.c || 0;
+  const totalPaid = getFn(`
     SELECT COUNT(*) as c FROM invite_relations ir
     JOIN users u ON ir.invitee_id = u.id
     WHERE ir.inviter_id=? AND (u.lifetime=1 OR (u.is_paid=1 AND u.paid_expires_at>datetime('now')))
-  `, [userId])?.c || 0;
+  `, [inviterId])?.c || 0;
 
-  const existingReward = get("SELECT reward_type FROM invite_rewards WHERE user_id=? ORDER BY id DESC LIMIT 1", [userId]);
+  const highestReward = getFn(
+    'SELECT level FROM invite_rewards WHERE user_id=? ORDER BY level DESC LIMIT 1', [inviterId]
+  );
+  const currentLevel = highestReward?.level || 0;
 
-  const rewardLevels = [
-    { type: 'monthly',  threshold_total: 10, threshold_paid: 5,  level: 1 },
-    { type: 'yearly',   threshold_total: 999999, threshold_paid: 30, level: 2 },
-    { type: 'lifetime', threshold_total: 999999, threshold_paid: 100, level: 3 },
-  ];
-
-  const existingLevel = existingReward ? (rewardLevels.find(r => r.type === existingReward.reward_type)?.level || 0) : 0;
-
-  for (const info of rewardLevels) {
-    if (info.level <= existingLevel) continue;
-    if (total < info.threshold_total && paid < info.threshold_paid) continue;
-
-    const hasSame = get("SELECT id FROM invite_rewards WHERE user_id=? AND reward_type=?", [userId, info.type]);
-    if (hasSame) continue;
-
-    applyInviteReward(user, info.type);
-    return;
+  for (const info of REWARD_LEVELS) {
+    if (info.level <= currentLevel) continue;
+    // 满足注册阈值 OR 满足付费阈值 → 触发
+    if (totalReg < info.threshold_reg && totalPaid < info.threshold_paid) continue;
+    const existing = getFn('SELECT id FROM invite_rewards WHERE user_id=? AND reward_type=?', [inviterId, info.type]);
+    if (existing) continue;
+    _applyInviteReward(inviter, info, { runFn });
+    return; // 每次最多发一项
   }
 }
 
-function applyInviteReward(user, type) {
-  const now = new Date();
-  if (type === 'lifetime') {
-    run("UPDATE users SET lifetime=1, is_paid=1, paid_expires_at='9999-12-31 23:59:59' WHERE id=?", [user.id]);
-    run("INSERT INTO invite_rewards (user_id, reward_type, reward_desc) VALUES (?,?,?)", [user.id, 'lifetime', '邀请奖励：终身会员']);
-  } else if (type === 'yearly') {
-    let expires = user.paid_expires_at ? new Date(user.paid_expires_at) : now;
+function _applyInviteReward(inviter, info, { runFn }) {
+  if (info.type === 'lifetime') {
+    runFn("UPDATE users SET lifetime=1, is_paid=1, paid_expires_at='9999-12-31 23:59:59' WHERE id=?", [inviter.id]);
+    runFn("INSERT INTO invite_rewards (user_id, reward_type, reward_desc, level, granted_at) VALUES (?,?,?,?,datetime('now','+8 hours'))",
+      [inviter.id, 'lifetime', `邀请奖励：终身会员（${info.threshold_paid}名付费用户）`, info.level]);
+    console.log(`邀请奖励发放: 邀请人${inviter.id}获得终身会员`);
+  } else {
+    const now = new Date();
+    let expires = inviter.paid_expires_at ? new Date(inviter.paid_expires_at) : now;
     if (expires <= now) expires = now;
-    expires.setFullYear(expires.getFullYear() + 1);
+    expires.setMonth(expires.getMonth() + info.months);
     const newExpires = expires.toISOString().replace('T', ' ').slice(0, 19);
-    run("UPDATE users SET lifetime=0, is_paid=1, paid_expires_at=? WHERE id=?", [newExpires, user.id]);
-    run("INSERT INTO invite_rewards (user_id, reward_type, reward_desc) VALUES (?,?,?)", [user.id, 'yearly', '邀请奖励：1年订阅会员']);
-  } else if (type === 'monthly') {
-    let expires = user.paid_expires_at ? new Date(user.paid_expires_at) : now;
-    if (expires <= now) expires = now;
-    expires.setDate(expires.getDate() + 7);
-    const newExpires = expires.toISOString().replace('T', ' ').slice(0, 19);
-    run("UPDATE users SET lifetime=0, is_paid=1, paid_expires_at=? WHERE id=?", [newExpires, user.id]);
-    run("INSERT INTO invite_rewards (user_id, reward_type, reward_desc) VALUES (?,?,?)", [user.id, 'monthly', '邀请奖励：7天订阅会员']);
+    const descMap = { monthly: '月度邀请奖励（1个月）', monthly2: '第2个月度邀请奖励（1个月）', yearly: '年度邀请奖励（10个月）' };
+    runFn("UPDATE users SET lifetime=0, is_paid=1, paid_expires_at=? WHERE id=?", [newExpires, inviter.id]);
+    runFn("INSERT INTO invite_rewards (user_id, reward_type, reward_desc, level, granted_at) VALUES (?,?,?,?,datetime('now','+8 hours'))",
+      [inviter.id, info.type, descMap[info.type], info.level]);
+    console.log(`邀请奖励发放: 邀请人${inviter.id}获得${descMap[info.type]}`);
   }
+}
+
+// sync版（注册时调用）
+function checkAndGrantInviteReward(inviterId) {
+  _checkAndGrantInviteReward(inviterId, { getFn: get, runFn: run });
+}
+
+// async版（payment.js 付费回调时使用）
+async function checkAndGrantInviteRewardAsync(inviterId) {
+  const { getAsync, runAsync } = require('../db');
+  _checkAndGrantInviteReward(inviterId, { getFn: getAsync, runFn: runAsync });
 }
 
 function checkAbuseAndRecord(user, device_fp, ip) {
@@ -128,6 +141,15 @@ router.post('/register', async (req, res) => {
     const inviter = await getAsync('SELECT user_id FROM invite_codes WHERE code=?', [invite_code.trim().toLowerCase()]);
     if (inviter && inviter.user_id !== user.id) {
       await runAsync('INSERT INTO invite_relations (inviter_id, invitee_id) VALUES (?,?)', [inviter.user_id, user.id]);
+      // 被邀请人B获得7天订阅
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 7);
+      await runAsync("UPDATE users SET is_paid=1, paid_expires_at=? WHERE id=?", [
+        expires.toISOString().replace('T', ' ').slice(0, 19), user.id
+      ]);
+      await runAsync("INSERT INTO invite_rewards (user_id, reward_type, reward_desc, level, granted_at) VALUES (?,?,?,?,datetime('now','+8 hours'))",
+        [user.id, 'invitee_7d', '使用邀请码注册：7天订阅', 0]);
+      // 邀请人A的奖励（按注册/付费阈值触发）
       checkAndGrantInviteReward(inviter.user_id);
     }
   }
@@ -191,10 +213,8 @@ router.post('/forgot-password', async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ error: '请输入手机号' });
   if (!/^1[3-9]\d{9}$/.test(phone)) return res.status(400).json({ error: '手机号格式不正确' });
-
-  const user = await getAsync('SELECT id FROM users WHERE phone=?', [phone]);
-  if (!user) return res.json({ message: '如果该手机号已注册，验证码已发送。' });
-  res.json({ message: '验证码已发送，请查收短信。', needVerify: true });
+  // 始终返回相同响应，防止攻击者枚举手机号是否已注册
+  res.json({ message: '如果该手机号已注册，验证码已发送。' });
 });
 
 // ─── 重置密码 ──────────────────────────────────────────────────────
@@ -218,3 +238,4 @@ router.post('/reset-password', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.checkAndGrantInviteRewardAsync = checkAndGrantInviteRewardAsync;

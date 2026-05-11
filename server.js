@@ -11,6 +11,7 @@ const historyRoutes = require('./routes/history');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
+app.set('trust proxy', true);
 app.use(express.json({ limit: '200mb' }));
 
 // 跨域
@@ -26,6 +27,7 @@ app.use((req, res, next) => {
 app.get('/wenshu', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/wenshu/', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/wenshu/admin', (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+app.get('/wenshu/admin/', (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/wenshu/admin.html', (_, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
 // 挂载路由（支持 /api 和 /wenshu/api 两种路径）
@@ -216,17 +218,39 @@ for (const path of ['/api/batch-download', '/wenshu/api/batch-download']) {
   });
 }
 
-function bufferToBase64(buffer) {
-  return Buffer.from(buffer).toString('base64');
-}
-
 const PORT = process.env.PORT || 3000;
 
-// 启动时初始化数据库（必须在 listen 之前完成）
+// ─── 启动时初始化数据库（必须在 listen 之前完成）──────────────
+async function runMigrations() {
+  const { getAsync, runAsync } = require('./db');
+  try {
+    // v3.2: 回填 subscription_started_at（取最早一笔已支付订单时间）
+    await runAsync(`
+      UPDATE users SET subscription_started_at = (
+        SELECT MIN(paid_at) FROM payment_records
+        WHERE payment_records.user_id = users.id
+          AND payment_records.status = 'paid'
+          AND payment_records.paid_at IS NOT NULL
+      )
+      WHERE subscription_started_at IS NULL
+        AND id IN (SELECT DISTINCT user_id FROM payment_records WHERE status = 'paid' AND paid_at IS NOT NULL)
+    `);
+    // 冻结旧 balance（仅作展示用）
+    await runAsync("UPDATE users SET balance_computed_at = datetime('now', '+8 hours') WHERE balance_computed_at IS NULL");
+    // 标记旧表为废弃
+    await runAsync("UPDATE consumption_log SET deprecated = 1 WHERE deprecated = 0 OR deprecated IS NULL");
+    await runAsync("UPDATE paid_periods  SET deprecated = 1 WHERE deprecated = 0 OR deprecated IS NULL");
+    console.log('v3.2 迁移完成');
+  } catch (err) {
+    console.error('v3.2 迁移失败:', err.message, err.stack);
+  }
+}
+
 async function start() {
   try {
     await getDb();
     console.log('数据库初始化完成');
+    await runMigrations();
   } catch (err) {
     console.error('数据库初始化失败:', err.message);
     process.exit(1);

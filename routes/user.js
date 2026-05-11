@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { get, run, all, getAsync, runAsync, allAsync } = require('../db');
 const { authenticate, isPaidUser } = require('../middleware/auth');
+const wxpay = require('../utils/wxpay');
 
 const router = express.Router();
 
@@ -52,7 +53,7 @@ router.get('/me', authenticate, async (req, res) => {
     if (!user) return res.status(404).json({ error: '用户不存在' });
 
     const userIsPaid = isPaidUser(user);
-    const inviteCode = getOrCreateInviteCode(db, user.id);
+    const inviteCode = getOrCreateInviteCode(user.id);
     res.json({
       id: user.id,
       username: user.username,
@@ -93,9 +94,7 @@ router.post('/change-password', authenticate, async (req, res) => {
 
 // 客服确认充值（实际写入，保留以兼容旧渠道）
 router.post('/recharge/confirm', authenticate, async (req, res) => {
-  const { type, months, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { type, months } = req.body;
 
   const { price, months: addMonths } = calcRecharge(type, months);
   const user = await getAsync('SELECT * FROM users WHERE id = ?', [req.user.userId]);
@@ -115,9 +114,7 @@ router.post('/recharge/confirm', authenticate, async (req, res) => {
 
 // 管理员手动开通/取消付费（保留兼容，新调用改用 /admin/set-lifetime）
 router.post('/admin/set-paid', async (req, res) => {
-  const { userId, phone, isPaid, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { userId, phone, isPaid } = req.body;
   if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
@@ -139,9 +136,7 @@ router.post('/admin/set-paid', async (req, res) => {
 
 // 管理员切换终身会员状态
 router.post('/admin/set-lifetime', async (req, res) => {
-  const { userId, phone, lifetime, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { userId, phone, lifetime } = req.body;
   if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
@@ -164,9 +159,7 @@ router.post('/admin/set-lifetime', async (req, res) => {
 
 // 管理员确认退款（取消付费）
 router.post('/admin/confirm-refund', async (req, res) => {
-  const { userId, phone, refund_amount, refund_time, refund_reason, refund_proof, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { userId, phone, refund_amount, refund_time, refund_reason, refund_proof } = req.body;
   if (!refund_amount || !refund_time || !refund_reason) return res.status(400).json({ error: '退款金额、时间和理由不能为空' });
 
   try {
@@ -188,9 +181,7 @@ router.post('/admin/confirm-refund', async (req, res) => {
 
 // 管理员添加用户
 router.post('/admin/add-user', async (req, res) => {
-  const { username, phone, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { username, phone } = req.body;
   if (!username || username.trim().length < 2) return res.status(400).json({ error: '用户名至少2个字符' });
   if (!phone) return res.status(400).json({ error: '请输入手机号' });
   if (!/^1[3-9]\d{9}$/.test(phone)) return res.status(400).json({ error: '手机号格式不正确' });
@@ -210,9 +201,7 @@ router.post('/admin/add-user', async (req, res) => {
 
 // 管理员重置用户密码（设为默认密码，强制改密）
 router.post('/admin/reset-password', async (req, res) => {
-  const { userId, phone, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { userId, phone } = req.body;
   if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
@@ -231,9 +220,7 @@ router.post('/admin/reset-password', async (req, res) => {
 
 // 管理员将用户设为免费会员
 router.post('/admin/set-free', async (req, res) => {
-  const { userId, phone, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { userId, phone } = req.body;
   if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
@@ -251,9 +238,7 @@ router.post('/admin/set-free', async (req, res) => {
 
 // 管理员调整会员到期时间
 router.post('/admin/adjust-expiry', async (req, res) => {
-  const { userId, phone, start_date, quantity, unit, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { userId, phone, start_date, quantity, unit } = req.body;
   if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
   if (!start_date) return res.status(400).json({ error: '请选择起始日期' });
   if (!quantity || quantity <= 0) return res.status(400).json({ error: '请输入正确的时长' });
@@ -280,10 +265,284 @@ router.post('/admin/adjust-expiry', async (req, res) => {
 });
 
 // 管理员删除用户（带保护：终身用户或有订阅期禁止删除）
+// ─── 退款申请列表 ────────────────────────────────────────────────
+router.get('/admin/refund-requests', async (req, res) => {
+  const { status, page = 1 } = req.query;
+  try {
+    const PAGE_SIZE = 20;
+    const offset = (parseInt(page) - 1) * PAGE_SIZE;
+    let sql = `
+      SELECT rr.*, u.username, u.phone as user_phone
+      FROM refund_requests rr
+      JOIN users u ON rr.user_id = u.id
+    `;
+    const params = [];
+    if (status) {
+      sql += ' WHERE rr.status = ?';
+      params.push(status);
+    }
+    sql += ' ORDER BY rr.created_at DESC LIMIT ? OFFSET ?';
+    params.push(PAGE_SIZE, offset);
+    const rows = await allAsync(sql, params);
+
+    let countSql = 'SELECT COUNT(*) as c FROM refund_requests rr';
+    if (status) countSql += ' WHERE status = ?';
+    const total = (await getAsync(countSql, status ? [status] : []))?.c || 0;
+
+    res.json({
+      requests: rows.map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        username: r.username,
+        userPhone: r.user_phone || r.user_phone,
+        amount: r.amount,
+        computedAmount: r.computed_amount,
+        formulaJson: r.formula_json ? JSON.parse(r.formula_json) : null,
+        status: r.status,
+        rejectReason: r.reject_reason,
+        wxRefundNo: r.wx_refund_no,
+        createdAt: r.created_at,
+        reviewedAt: r.reviewed_at,
+      })),
+      total,
+      page: parseInt(page),
+      pageSize: PAGE_SIZE,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 批准退款申请（管理员操作） ─────────────────────────────────
+router.post('/admin/refund-requests/:id/approve', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const req_record = await getAsync('SELECT * FROM refund_requests WHERE id = ?', [id]);
+    if (!req_record) return res.status(404).json({ error: '申请不存在' });
+    if (req_record.status !== 'pending') return res.status(400).json({ error: '该申请已处理' });
+
+    const user = await getAsync('SELECT * FROM users WHERE id = ?', [req_record.user_id]);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+
+    // 找最近一笔已支付订单（含微信 transaction_id）
+    const record = await getAsync(
+      `SELECT * FROM payment_records WHERE user_id = ? AND status = 'paid'
+       ORDER BY id DESC LIMIT 1`,
+      [user.id]
+    );
+    if (!record) return res.status(400).json({ error: '没有可退款的支付记录' });
+
+    const refundFeeYuan = Number(req_record.computed_amount) || 0;
+    if (refundFeeYuan <= 0) return res.status(400).json({ error: '可退金额为0，无法退款' });
+
+    const outRefundNo = 'REF_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6).toUpperCase();
+
+    let wxResult;
+    try {
+      wxResult = await wxpay.refund({
+        transactionId: record.wx_transaction_id || null,
+        outTradeNo: record.trade_no,
+        totalFee: Math.round(record.amount * 100),
+        refundFee: Math.round(refundFeeYuan * 100),
+        outRefundNo,
+        description: `管理员退款-用户${user.phone}`,
+      });
+    } catch (err) {
+      console.error('微信退款API异常:', err);
+      await runAsync(
+        "UPDATE refund_requests SET status='failed', reviewed_at=datetime('now','+8 hours') WHERE id=?",
+        [id]
+      );
+      return res.status(500).json({ error: '微信退款请求失败：' + err.message });
+    }
+
+    if (wxResult.return_code !== 'SUCCESS' || wxResult.result_code !== 'SUCCESS') {
+      await runAsync(
+        "UPDATE refund_requests SET status='failed', reviewed_at=datetime('now','+8 hours') WHERE id=?",
+        [id]
+      );
+      return res.status(400).json({
+        error: '微信退款失败：' + (wxResult.err_code_des || wxResult.err_code || wxResult.return_msg || '未知错误'),
+      });
+    }
+
+    // 退款成功
+    await runAsync(
+      `INSERT INTO balance_log (user_id, amount, type, description, created_at)
+       VALUES (?, ?, '微信退款', ?, datetime('now', '+8 hours'))`,
+      [user.id, -refundFeeYuan, `管理员退款-${outRefundNo}`]
+    );
+    await runAsync(
+      `UPDATE refund_requests SET status='completed', reviewed_at=datetime('now','+8 hours'),
+       wx_refund_no=?, reviewed_by='admin' WHERE id=?`,
+      [outRefundNo, id]
+    );
+
+    res.json({
+      message: `微信退款成功，退款 ${refundFeeYuan.toFixed(1)} 元（退款单号：${outRefundNo}）`,
+      refundAmount: refundFeeYuan,
+      outRefundNo,
+      userId: user.id,
+      username: user.username || '',
+      phone: user.phone || '',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 管理员退款预览（从余额流水入口）──────────────────────────
+router.get('/admin/refund-preview', async (req, res) => {
+  const { userId, phone } = req.query;
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
+  try {
+    // 防御：若 subscription_started_at 列不存在，降级查询
+    let user = null;
+    let subscriptionStartedAt = null;
+    const qUser = userId
+      ? ['SELECT id, phone, lifetime, subscription_started_at FROM users WHERE id = ?', [userId]]
+      : ['SELECT id, phone, lifetime, subscription_started_at FROM users WHERE phone = ?', [phone]];
+    const qUserFallback = userId
+      ? ['SELECT id, phone, lifetime FROM users WHERE id = ?', [userId]]
+      : ['SELECT id, phone, lifetime FROM users WHERE phone = ?', [phone]];
+    try {
+      user = await getAsync(qUser[0], qUser[1]);
+      if (user) subscriptionStartedAt = user.subscription_started_at;
+    } catch (e) {
+      user = await getAsync(qUserFallback[0], qUserFallback[1]);
+    }
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+
+    const records = await allAsync(
+      "SELECT * FROM payment_records WHERE user_id = ? AND status = 'paid'",
+      [user.id]
+    );
+    const totalPaid = records.reduce((s, r) => s + (r.amount || 0), 0);
+    const { refund } = computeRefundFromRecords(records, subscriptionStartedAt);
+
+    res.json({ totalPaid, refundable: refund, lifetime: user.lifetime === 1 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── 管理员直接退款（绕过申请流程）─────────────────────────────
+router.post('/admin/refund-direct', async (req, res) => {
+  const { userId, phone, refundAmount } = req.body;
+  if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
+  if (!refundAmount || refundAmount <= 0) return res.status(400).json({ error: '请输入有效的退款金额' });
+  try {
+    const user = userId
+      ? await getAsync('SELECT * FROM users WHERE id = ?', [userId])
+      : await getAsync('SELECT * FROM users WHERE phone = ?', [phone]);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+
+    // 历史总付款
+    const records = await allAsync(
+      "SELECT * FROM payment_records WHERE user_id = ? AND status = 'paid'",
+      [user.id]
+    );
+    const totalPaid = records.reduce((s, r) => s + (r.amount || 0), 0);
+    if (refundAmount > totalPaid) {
+      return res.status(400).json({ error: '退款金额不能超过该用户历史付款总额（' + totalPaid.toFixed(1) + '元）' });
+    }
+
+    // 取最近一笔已支付订单（含微信 transaction_id）
+    const record = records.sort((a, b) => b.id - a.id)[0];
+    if (!record) return res.status(400).json({ error: '没有可退款的支付记录' });
+
+    const outRefundNo = 'REF_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    let wxResult;
+    try {
+      wxResult = await wxpay.refund({
+        transactionId: record.wx_transaction_id || null,
+        outTradeNo: record.trade_no,
+        totalFee: Math.round(record.amount * 100),
+        refundFee: Math.round(refundAmount * 100),
+        outRefundNo,
+        description: `管理员直接退款-用户${user.phone}`,
+      });
+    } catch (err) {
+      await runAsync(
+        "INSERT INTO refund_requests (user_id, user_phone, amount, computed_amount, status, wx_refund_no, reviewed_by, reviewed_at, created_at) VALUES (?,?,?,?,?,?,?,datetime('now','+8 hours'),datetime('now','+8 hours'))",
+        [user.id, user.phone || '', refundAmount, refundAmount, 'failed', outRefundNo, 'admin']
+      );
+      return res.status(500).json({ error: '微信退款请求失败：' + err.message });
+    }
+
+    if (wxResult.return_code !== 'SUCCESS' || wxResult.result_code !== 'SUCCESS') {
+      await runAsync(
+        "INSERT INTO refund_requests (user_id, user_phone, amount, computed_amount, status, wx_refund_no, reviewed_by, reject_reason, reviewed_at, created_at) VALUES (?,?,?,?,?,?,?,?,datetime('now','+8 hours'),datetime('now','+8 hours'))",
+        [user.id, user.phone || '', refundAmount, refundAmount, 'failed', outRefundNo, 'admin', wxResult.err_code_des || wxResult.return_msg]
+      );
+      return res.status(400).json({ error: '微信退款失败：' + (wxResult.err_code_des || wxResult.err_code || wxResult.return_msg || '未知错误') });
+    }
+
+    // 退款成功
+    await runAsync(
+      `INSERT INTO balance_log (user_id, amount, type, description, created_at)
+       VALUES (?, ?, '微信退款', ?, datetime('now', '+8 hours'))`,
+      [user.id, -refundAmount, `管理员直接退款-${outRefundNo}`]
+    );
+    await runAsync(
+      "INSERT INTO refund_requests (user_id, user_phone, amount, computed_amount, status, wx_refund_no, reviewed_by, reviewed_at, created_at) VALUES (?,?,?,?,?,?,?,datetime('now','+8 hours'),datetime('now','+8 hours'))",
+      [user.id, user.phone || '', refundAmount, refundAmount, 'completed', outRefundNo, 'admin']
+    );
+
+    res.json({ message: `退款成功，退款 ${refundAmount.toFixed(1)} 元（退款单号：${outRefundNo}）`, refundAmount, outRefundNo });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 辅助函数：仅基于记录计算退款（不查DB）
+function computeRefundFromRecords(paymentRecords, subscriptionStartedAt) {
+  const MONTHLY_RATE = 1.0, YEARLY_RATE = 0.5, MONTHLY_CAP = 5.0;
+  const totalPaid = (paymentRecords || []).filter(r => r.status === 'paid').reduce((s, r) => s + (r.amount || 0), 0);
+  if (totalPaid <= 0 || !subscriptionStartedAt) return { refund: 0, totalPaid, consumed: 0 };
+  const latest = (paymentRecords || []).filter(r => r.status === 'paid')
+    .sort((a, b) => new Date(b.paid_at || 0) - new Date(a.paid_at || 0))[0];
+  const isYearly = latest?.recharge_type === 'yearly' ||
+    (latest?.recharge_type === 'monthly' && (latest?.recharge_months || 0) >= 10);
+  const dailyRate = isYearly ? YEARLY_RATE : MONTHLY_RATE;
+  let consumed = 0;
+  let cursor = new Date(subscriptionStartedAt.replace(' ', 'T') + 'Z');
+  const end = new Date();
+  while (cursor < end) {
+    if (cursor.getUTCDate() === 1) {
+      const year = cursor.getUTCFullYear(), month = cursor.getUTCMonth();
+      const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      consumed += Math.min(daysInMonth * dailyRate, MONTHLY_CAP);
+      cursor = new Date(Date.UTC(year, month + 1, 1));
+    } else {
+      consumed += dailyRate;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+  return { refund: Math.max(0, Math.round((totalPaid - consumed) * 100) / 100), totalPaid, consumed: Math.round(consumed * 100) / 100 };
+}
+router.post('/admin/refund-requests/:id/reject', async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  try {
+    const req_record = await getAsync('SELECT * FROM refund_requests WHERE id = ?', [id]);
+    if (!req_record) return res.status(404).json({ error: '申请不存在' });
+    if (req_record.status !== 'pending') return res.status(400).json({ error: '该申请已处理' });
+
+    await runAsync(
+      `UPDATE refund_requests SET status='rejected', reject_reason=?, reviewed_at=datetime('now','+8 hours'),
+       reviewed_by='admin' WHERE id=?`,
+      [reason || '管理员拒绝', id]
+    );
+
+    res.json({ message: '已拒绝该退款申请' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/admin/delete', async (req, res) => {
-  const { userId, phone, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { userId, phone } = req.body;
   if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
@@ -311,8 +570,6 @@ router.post('/admin/delete', async (req, res) => {
 // 管理员获取用户余额流水
 router.get('/admin/balance-log', async (req, res) => {
   const { userId, phone, page = 1 } = req.query;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (req.headers['x-admin-key'] !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
   if (!userId && !phone) return res.status(400).json({ error: '缺少用户ID或手机号' });
 
   try {
@@ -332,7 +589,7 @@ router.get('/admin/balance-log', async (req, res) => {
       WHERE bl.user_id = ?
       ORDER BY bl.created_at DESC
       LIMIT ? OFFSET ?
-    `);
+    `, [user.id, PAGE_SIZE, offset]);
 
     res.json({ balance: user.balance, logs, total, page: parseInt(page), pageSize: PAGE_SIZE });
   } catch (err) {
@@ -342,9 +599,7 @@ router.get('/admin/balance-log', async (req, res) => {
 
 // 管理员修改用户手机号
 router.post('/admin/update-phone', async (req, res) => {
-  const { userId, phone, adminKey } = req.body;
-  const ADMIN_KEY = process.env.ADMIN_KEY || 'mctmilk-admin-2026';
-  if (adminKey !== ADMIN_KEY) return res.status(403).json({ error: '管理员密钥错误' });
+  const { userId, phone } = req.body;
   if (!userId) return res.status(400).json({ error: '缺少用户ID' });
   if (!phone || !/^1[3-9]\d{9}$/.test(phone)) return res.status(400).json({ error: '手机号格式不正确' });
 
@@ -366,19 +621,25 @@ const REWARD_POLICY = [
   {
     level: 1, type: 'monthly',
     condition: '已邀请满 10 人，或已邀请满 5 位付费用户',
-    reward: '奖励 7 天订阅会员',
+    reward: '月度邀请奖励（+1个月）',
     remaining_total: 10, remaining_paid: 5,
   },
   {
-    level: 2, type: 'yearly',
+    level: 2, type: 'monthly2',
+    condition: '已邀请满 20 人，或已邀请满 10 位付费用户（第2次月度）',
+    reward: '第2个月度邀请奖励（+1个月）',
+    remaining_total: 20, remaining_paid: 10,
+  },
+  {
+    level: 3, type: 'yearly',
     condition: '已邀请满 30 位付费用户',
-    reward: '奖励 1 年订阅会员（不与月度叠加，取最高级）',
+    reward: '年度邀请奖励（+10个月）',
     remaining_total: null, remaining_paid: 30,
   },
   {
-    level: 3, type: 'lifetime',
+    level: 4, type: 'lifetime',
     condition: '已邀请满 100 位付费用户',
-    reward: '奖励终身会员（最高奖励，覆盖其他所有）',
+    reward: '终身会员',
     remaining_total: null, remaining_paid: 100,
   },
 ];

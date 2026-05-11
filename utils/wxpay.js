@@ -4,6 +4,8 @@
  */
 const crypto = require('crypto');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
 const APPID = process.env.WX_APPID;
 const MCH_ID = process.env.WX_MCH_ID;
@@ -37,20 +39,35 @@ function buildSignature(params) {
 
 /**
  * 解析 XML 为 JS 对象
+ * 微信返回的 XML 是同级多标签，贪婪/非贪婪回溯均会误匹配，
+ * 故用状态机从左到右解析：遇到 <tag> 则记录起点，遇到 </tag> 则提取内容
  */
 function parseXML(xml) {
+  const plain = xml.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+
+  // 跳过根 <xml> 标签，改为直接解析其内部内容
+  let content = plain;
+  const rootMatch = /^<xml>([\s\S]*)<\/xml>$/.exec(plain);
+  if (rootMatch) content = rootMatch[1];
+
   const obj = {};
-  const pattern = /<(\w+)>(<!\[CDATA\[([\s\S]*?)\]\]>|([\s\S]*?))<=\1>/g;
-  let match;
-  while ((match = pattern.exec(xml)) !== null) {
-    obj[match[1]] = match[3] !== undefined ? match[3] : (match[4] || '');
-  }
-  // Fallback: simple tag extraction for simple XML
-  if (Object.keys(obj).length === 0) {
-    const tagP = /<(\w+)>([\s\S]*?)<\/\1>/g;
-    while ((match = tagP.exec(xml)) !== null) {
-      obj[match[1]] = match[2].trim();
-    }
+  // 用 search 而非 match+pos（^ 在 pos>0 时不生效）
+  let i = 0;
+  while (i < content.length) {
+    // 跳过空白
+    while (i < content.length && content.charCodeAt(i) <= 32) i++;
+    if (i >= content.length || content[i] !== '<') break;
+    // 找到 <tagName>
+    const tagMatch = content.substring(i).match(/^<(\w+)>/);
+    if (!tagMatch) break;
+    const tagName = tagMatch[1];
+    const contentStart = i + tagMatch[0].length;
+    // 找 </tagName>
+    const closeTag = '</' + tagName + '>';
+    const contentEnd = content.indexOf(closeTag, contentStart);
+    if (contentEnd === -1) break;
+    obj[tagName] = content.substring(contentStart, contentEnd).trim();
+    i = contentEnd + closeTag.length;
   }
   return obj;
 }
@@ -82,9 +99,26 @@ function wxRequest(path, data) {
     const req = https.request(options, res => {
       let raw = '';
       res.on('data', chunk => raw += chunk);
-      res.on('end', () => resolve(parseXML(raw)));
+      res.on('end', () => {
+        console.log('[wxpay] 微信API响应, path=', path, 'raw=', raw.slice(0, 500));
+        if (!raw) return reject(new Error('微信API返回空'));
+        resolve(parseXML(raw));
+      });
+      res.on('error', e => {
+        console.error('[wxpay] 响应流错误:', e.message);
+        reject(new Error('响应流错误: ' + e.message));
+      });
     });
-    req.on('error', reject);
+    req.on('error', e => {
+      console.error('[wxpay] 请求错误:', e.message);
+      reject(new Error('微信API请求失败: ' + e.message));
+    });
+    // 10秒超时
+    req.setTimeout(10000, () => {
+      console.error('[wxpay] 请求超时:', path);
+      req.destroy();
+      reject(new Error('微信API请求超时（10秒）'));
+    });
     req.write(body);
     req.end();
   });
@@ -143,20 +177,60 @@ async function closeOrder(outTradeNo) {
  * @param {object} opts - { transactionId, totalFee, refundFee, outRefundNo, description }
  */
 async function refund(opts) {
-  const { transactionId, totalFee, refundFee, outRefundNo, description } = opts;
+  const { transactionId, outTradeNo, totalFee, refundFee, outRefundNo, description } = opts;
   const params = {
     appid: APPID,
     mch_id: MCH_ID,
     nonce_str: nonceStr(),
-    transaction_id: transactionId,
     total_fee: totalFee,
     refund_fee: refundFee,
     out_refund_no: outRefundNo,
     refund_desc: description || '用户退款',
   };
+  // 优先用 transaction_id，退款接口支持两种
+  if (transactionId) params.transaction_id = transactionId;
+  else if (outTradeNo) params.out_trade_no = outTradeNo;
   params.sign = buildSignature(params);
-  // 退款需要证书，这里仅返回构造的参数，实际退款在 payment.js 中用 https.request + 证书实现
-  return params;
+
+  // 退款需要双向证书
+  const CERT_DIR = path.join(__dirname, '..', 'certs');
+  const certPem = path.join(CERT_DIR, 'apiclient_cert.pem');
+  const keyPem = path.join(CERT_DIR, 'apiclient_key.pem');
+  return wxRequestWithCert('/secapi/pay/refund', params, certPem, keyPem);
+}
+
+/**
+ * 发送带客户端证书的 HTTPS POST 请求（用于退款等需要证书的接口）
+ */
+function wxRequestWithCert(path, data, certPath, keyPath) {
+  return new Promise((resolve, reject) => {
+    const body = toXML(data);
+    const options = {
+      hostname: API_BASE,
+      path,
+      method: 'POST',
+      cert: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath),
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    };
+    const req = https.request(options, res => {
+      let raw = '';
+      res.on('data', chunk => raw += chunk);
+      res.on('end', () => {
+        console.log('[wxpay] 退款API响应, path=', path, 'raw=', raw.slice(0, 500));
+        if (!raw) return reject(new Error('微信退款API返回空'));
+        resolve(parseXML(raw));
+      });
+      res.on('error', e => reject(new Error('退款响应流错误: ' + e.message)));
+    });
+    req.on('error', e => reject(new Error('退款请求失败: ' + e.message)));
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error('退款请求超时（15秒）')); });
+    req.write(body);
+    req.end();
+  });
 }
 
 module.exports = {

@@ -134,6 +134,59 @@
   .btn-delete:hover { background: #fecaca; }
 
   .action-cell { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .phone-wrap { display: inline-flex; align-items: center; gap: 4px; cursor: default; }
+  .phone-edit-btn { display: none; background: #2563eb; color: #fff; border: none; border-radius: 3px; font-size: 11px; padding: 1px 6px; cursor: pointer; line-height: 1.4; white-space: nowrap; }
+  .phone-wrap:hover .phone-edit-btn { display: inline-block; }
+
+  /* 手机端用户卡片布局（横向两列：左信息、右按钮） */
+  .user-card {
+    display: none;
+    flex-direction: row;
+    align-items: stretch;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 0;
+    margin-bottom: 6px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .user-card-info {
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #374151;
+    line-height: 1.9;
+    min-width: 0;
+  }
+  .user-card-info .lbl { color: #9ca3af; margin-right: 4px; }
+  .user-card-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 6px;
+    border-left: 1px solid #f3f4f6;
+    min-width: 56px;
+    background: #fafafa;
+    flex-shrink: 0;
+  }
+  .user-card-actions .btn-sm { padding: 3px 4px; font-size: 12px; border-radius: 4px; text-align: center; width: 100%; }
+  .user-card-actions .btn-sm.btn-activate { background: #d1fae5; color: #065f46; }
+  .user-card-actions .btn-sm.btn-activate:hover { background: #a7f3d0; }
+  .user-card-actions .btn-sm.btn-deactivate { background: #fef3c7; color: #92400e; }
+  .user-card-actions .btn-sm.btn-deactivate:hover { background: #fde68a; }
+  .user-card-actions .btn-sm.btn-reset { background: #ede9fe; color: #5b21b6; }
+  .user-card-actions .btn-sm.btn-reset:hover { background: #ddd6fe; }
+  .user-card-actions .btn-sm.btn-delete { background: #fee2e2; color: #991b1b; }
+  .user-card-actions .btn-sm.btn-delete:hover { background: #fecaca; }
+
+  @media (max-width: 640px) {
+    .user-table-wrap { overflow-x: auto; }
+    .user-table { display: none; }
+    #userTable { display: flex; flex-direction: column; }
+    .user-card { display: flex; }
+    .modal { margin: 10px; max-height: 90vh; overflow-y: auto; }
+  }
   .toast {
     position: fixed;
     top: 20px;
@@ -257,7 +310,7 @@ async function doResetPwd() {
     const resp = await fetch('/wenshu/api/user/admin/reset-password', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ userId: resetPwdTargetUserId, phone: resetPwdTargetPhone || null, adminKey }),
+      body: JSON.stringify({ userId: resetPwdTargetUserId, phone: resetPwdTargetPhone || null }),
     });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d.error);
@@ -275,7 +328,7 @@ async function setFree(phone, username) {
     const resp = await fetch('/wenshu/api/user/admin/set-free', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ phone, adminKey }),
+      body: JSON.stringify({ phone }),
     });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d.error);
@@ -313,7 +366,7 @@ async function showBalanceLog(userId, username, phone, page = 1) {
     balanceLogTotal = d.total || 0;
     renderBalanceLog();
   } catch(e) {
-    document.getElementById('balanceLogList').innerHTML = '<div class="empty" style="padding:20px;color:#e63946">' + e.message + '</div>';
+    document.getElementById('balanceLogList').innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af;font-size:13px">真的没有呀 T_T</div>';
   }
 }
 
@@ -324,20 +377,21 @@ function renderBalanceLog() {
   const curr = balanceLogPage;
 
   if (list.length === 0) {
-    document.getElementById('balanceLogList').innerHTML = '<div class="empty" style="padding:20px">暂无流水记录</div>';
+    document.getElementById('balanceLogList').innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af;font-size:13px">真的没有呀 T_T</div>';
   } else {
     document.getElementById('balanceLogList').innerHTML =
       '<table style="font-size:12px;width:100%"><thead><tr><th>时间</th><th>类型</th><th>金额</th><th>说明</th></tr></thead><tbody>' +
       list.map(log => {
-        const isPositive = log.amount > 0;
+        const amount = Number(log.amount) || 0;
+        const isPositive = amount > 0;
         const proofLink = log.refund_proof
           ? '<span onclick="showRefundProof(\'' + log.refund_proof.replace(/'/g, "\\'") + '\')" style="color:#007bff;cursor:pointer;margin-left:4px">[查看凭证]</span>'
           : '';
         return '<tr>' +
           '<td style="color:#9ca3af">' + (log.created_at || '').replace('T', ' ').slice(0, 19) + '</td>' +
-          '<td>' + log.type + '</td>' +
+          '<td>' + (log.type || '') + '</td>' +
           '<td style="color:' + (isPositive ? '#059669' : '#dc2626') + ';font-weight:600">' +
-            (isPositive ? '+' : '') + log.amount.toFixed(1) + ' 元</td>' +
+            (isPositive ? '+' : '') + amount.toFixed(1) + ' 元</td>' +
           '<td style="color:#6b7280">' + (log.description || '-') + proofLink + '</td>' +
         '</tr>';
       }).join('') + '</tbody></table>' +
@@ -348,6 +402,7 @@ function renderBalanceLog() {
       '</div>';
   }
 }
+
 
 
 // ─── 修改手机号 Modal ──────────────────────────────────────────────
@@ -361,6 +416,8 @@ function openPhoneEdit(userId, currentPhone) {
   document.getElementById('editPhoneModal').classList.add('active');
 }
 
+
+
 async function doEditPhone() {
   const newPhone = document.getElementById('editPhoneInput').value.trim();
   const errEl = document.getElementById('editPhoneError');
@@ -371,7 +428,7 @@ async function doEditPhone() {
     const resp = await fetch('/wenshu/api/user/admin/update-phone', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ userId: editPhoneUserId, phone: newPhone, adminKey }),
+      body: JSON.stringify({ userId: editPhoneUserId, phone: newPhone }),
     });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d.error);
@@ -394,7 +451,7 @@ async function toggleLifetime(userId, enable) {
     const resp = await fetch('/wenshu/api/user/admin/set-lifetime', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ userId, lifetime: enable ? 1 : 0, adminKey }),
+      body: JSON.stringify({ userId, lifetime: enable ? 1 : 0 }),
     });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d.error);
@@ -429,7 +486,7 @@ async function doAddUser() {
     const resp = await fetch('/wenshu/api/user/admin/add-user', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ username, phone, adminKey }),
+      body: JSON.stringify({ username, phone }),
     });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d.error);
@@ -488,7 +545,7 @@ async function doSetFree() {
     const resp = await fetch('/wenshu/api/user/admin/set-free', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ userId: adjustTargetUserId, phone: adjustTargetPhone || null, adminKey }),
+      body: JSON.stringify({ userId: adjustTargetUserId, phone: adjustTargetPhone || null }),
     });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d.error);
@@ -510,7 +567,7 @@ async function doRecharge() {
     const resp = await fetch('/wenshu/api/user/admin/adjust-expiry', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ userId: adjustTargetUserId, phone: adjustTargetPhone || null, start_date: startDate, quantity, unit, adminKey }),
+      body: JSON.stringify({ userId: adjustTargetUserId, phone: adjustTargetPhone || null, start_date: startDate, quantity, unit }),
     });
     const d = await resp.json();
     if (!resp.ok) throw new Error(d.error);
@@ -528,57 +585,64 @@ let refundTargetPhone = '';
 let refundTargetUsername = '';
 let refundTargetBalance = 0;
 
-function openRefundModal(userId, username, phone) {
+function openRefundModal(userId, username, phone, totalPaid) {
   refundTargetUserId = userId;
   refundTargetPhone = phone;
   refundTargetUsername = username || phone;
-  const user = users.find(u => u.phone === phone);
-  refundTargetBalance = user?.balance || 0;
-  document.getElementById('refundInfo').textContent = '为 ' + refundTargetUsername + '（' + refundTargetPhone + '）办理退款，当前余额：' + refundTargetBalance.toFixed(1) + ' 元';
+  const total = totalPaid || 0;
+  document.getElementById('refundInfo').textContent = '为 ' + refundTargetUsername + '（' + refundTargetPhone + '）办理退款';
   document.getElementById('refundAmount').value = '';
-  document.getElementById('refundTime').value = '';
-  document.getElementById('refundReason').value = '';
-  document.getElementById('refundProof').value = '';
+  document.getElementById('refundMaxTip').textContent = '最高可退：' + total.toFixed(1) + ' 元';
   document.getElementById('refundError').textContent = '';
   document.getElementById('refundModal').classList.add('active');
 }
 
 function fillRefundBalance() {
-  if (refundTargetBalance > 0) {
-    document.getElementById('refundAmount').value = refundTargetBalance.toFixed(1);
+  const tip = document.getElementById('refundMaxTip').textContent;
+  const match = tip.match(/最高可退：([\d.]+) 元/);
+  if (match) {
+    document.getElementById('refundAmount').value = parseFloat(match[1]).toFixed(1);
+  }
+}
+
+// 从余额流水弹窗打开退款
+async function openRefundFromLog() {
+  // 先获取该用户的总付款额
+  try {
+    const resp = await fetch('/wenshu/api/user/admin/refund-preview?userId=' + encodeURIComponent(balanceLogUserId), {
+      headers: headers(),
+    });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d.error || d.message);
+    openRefundModal(balanceLogUserId, balanceLogUsername, balanceLogPhone, d.totalPaid || 0);
+  } catch (e) {
+    toast('获取用户信息失败：' + e.message, 'error');
   }
 }
 
 async function doConfirmRefund() {
-  const refund_amount = document.getElementById('refundAmount').value.trim();
-  const refund_time = document.getElementById('refundTime').value.trim();
-  const refund_reason = document.getElementById('refundReason').value.trim();
-  let refund_proof = '';
-  const proofFile = document.getElementById('refundProof').files[0];
-  if (proofFile) {
-    refund_proof = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(proofFile);
-    });
-  }
+  const refundAmount = parseFloat(document.getElementById('refundAmount').value.trim());
   const errEl = document.getElementById('refundError');
   errEl.textContent = '';
-  if (!refund_amount || isNaN(parseFloat(refund_amount))) { errEl.textContent = '请填写退款金额'; return; }
-  if (!refund_time) { errEl.textContent = '请填写退款时间'; return; }
-  if (!refund_reason) { errEl.textContent = '请填写退款理由'; return; }
+  if (!refundAmount || isNaN(refundAmount) || refundAmount <= 0) {
+    errEl.textContent = '请输入有效的退款金额';
+    return;
+  }
+  if (!confirm('确定要为 ' + balanceLogUsername + '（' + balanceLogPhone + '）退款 ' + refundAmount.toFixed(1) + ' 元？')) return;
   try {
-    const resp = await fetch('/wenshu/api/user/admin/confirm-refund', {
+    const resp = await fetch('/wenshu/api/user/admin/refund-direct', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ userId: refundTargetUserId, phone: refundTargetPhone || null, refund_amount, refund_time, refund_reason, refund_proof, adminKey }),
+      body: JSON.stringify({ userId: balanceLogUserId, phone: balanceLogPhone || null, refundAmount }),
     });
     const d = await resp.json();
-    if (!resp.ok) throw new Error(d.error);
-    toast(d.message, 'success');
+    if (!resp.ok) throw new Error(d.error || d.message);
+    toast('退款成功：' + (d.message || ''), 'success');
     closeModal('refundModal');
-    await loadData();
+    showBalanceLog(balanceLogUserId, balanceLogUsername, balanceLogPhone, 1);
+    if (confirm('是否需要调整该用户的订阅到期时间？')) {
+      openRechargeModal(balanceLogUserId, balanceLogUsername, balanceLogPhone, false);
+    }
   } catch(e) {
     errEl.textContent = e.message;
   }
@@ -638,7 +702,12 @@ async function doConfirmRefund() {
 <div class="modal-overlay" id="balanceLogModal">
   <div class="modal" style="max-width:600px">
     <button class="modal-close" onclick="closeModal('balanceLogModal')">&times;</button>
-    <h3 id="balanceLogTitle">余额流水</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <h3 id="balanceLogTitle" style="margin:0">余额流水</h3>
+      <div style="display:flex;gap:6px">
+        <button id="openRefundFromLogBtn" onclick="openRefundFromLog()" style="padding:3px 10px;background:#dc2626;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer">退款</button>
+      </div>
+    </div>
     <div id="balanceLogList" style="max-height:400px;overflow-y:auto"></div>
   </div>
 </div>
@@ -656,25 +725,14 @@ async function doConfirmRefund() {
 <div class="modal-overlay" id="refundModal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('refundModal')">&times;</button>
-    <h3>退款确认</h3>
+    <h3>退款</h3>
     <p id="refundInfo" style="font-size:13px;color:#6b7280;margin-bottom:14px"></p>
     <div class="form-group">
       <label>退款金额（元）<span style="color:#e63946">*</span>
         <span id="fillBalanceBtn" onclick="fillRefundBalance()" style="float:right;font-size:11px;color:#007bff;cursor:pointer;font-weight:400;margin-right:4px">全额</span>
       </label>
-      <input type="number" id="refundAmount" placeholder="如：50" step="0.01" min="0">
-    </div>
-    <div class="form-group">
-      <label>退款时间 <span style="color:#e63946">*</span></label>
-      <input type="datetime-local" id="refundTime">
-    </div>
-    <div class="form-group">
-      <label>退款理由 <span style="color:#e63946">*</span></label>
-      <input type="text" id="refundReason" placeholder="请填写退款原因">
-    </div>
-    <div class="form-group">
-      <label>退款凭证图片（可选）</label>
-      <input type="file" id="refundProof" accept="image/*" style="font-size:13px">
+      <input type="number" id="refundAmount" placeholder="输入退款金额" step="0.01" min="0">
+      <p id="refundMaxTip" style="font-size:11px;color:#9ca3af;margin-top:4px"></p>
     </div>
     <div class="form-error" id="refundError" style="color:#e63946;font-size:12px;min-height:16px;margin-bottom:8px"></div>
     <button class="btn-primary" onclick="doConfirmRefund()">确认退款</button>
@@ -736,12 +794,26 @@ function doLogin() {
 }
 
 async function renderDashboard() {
+  // 检查待审核退款申请数量
+  let pendingCount = 0;
+  try {
+    const r = await fetch('/wenshu/api/user/admin/refund-requests?status=pending', { headers: headers() });
+    if (r.ok) {
+      const d = await r.json();
+      pendingCount = d.total || 0;
+    }
+  } catch {}
+  const pendingBadge = pendingCount > 0
+    ? '<span id="pendingRefundBadge" style="display:inline-block;width:8px;height:8px;background:#e63946;border-radius:50%;margin-left:4px;vertical-align:middle"></span>'
+    : '';
+
   $('#app').innerHTML = `
     <header>
       <a class="back-link" href="/wenshu">← 返回工具</a>
       <div class="header-right">
-        <span>管理员</span>
-        <button class="refresh-btn" onclick="loadData()">刷新</button>
+        <span>管理员端v3.0.2</span>
+        <button class="refresh-btn" onclick="renderDashboard()">刷新</button>
+        <button class="refresh-btn" onclick="renderRefundRequests()">退款申请${pendingBadge}</button>
         <button class="refresh-btn" onclick="logout()">退出</button>
       </div>
     </header>
@@ -758,7 +830,12 @@ async function renderDashboard() {
     <div class="card">
       <div class="section-title">
         <h2>用户列表</h2>
-        <button class="btn-sm btn-activate" onclick="openAddUserModal()">+ 添加用户</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="userSearchInput" type="text" placeholder="ID/手机/用户名"
+            style="padding:5px 10px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;max-width:160px"
+            oninput="filterUserList(this.value)">
+          <button class="btn-sm btn-activate" onclick="openAddUserModal()">+</button>
+        </div>
       </div>
       <div id="userTable">
         <div class="loading">加载中...</div>
@@ -831,15 +908,61 @@ function renderStats(s) {
   `;
 }
 
+let _userFilterKeyword = '';
+
+function maskPhone(phone) {
+  if (!phone || phone.length < 7) return phone || '-';
+  return phone.slice(0, 3) + '****' + phone.slice(-4);
+}
+
+function filterUserList(keyword) {
+  _userFilterKeyword = keyword.trim().toLowerCase();
+  renderUserTable();
+}
+
 function renderUserTable() {
   const wrap = $('#userTable');
   if (!wrap) return;
-  if (users.length === 0) {
-    wrap.innerHTML = '<div class="empty">暂无用户</div>';
+
+  const displayUsers = _userFilterKeyword
+    ? users.filter(u =>
+        String(u.id).includes(_userFilterKeyword) ||
+        (u.username || '').toLowerCase().includes(_userFilterKeyword) ||
+        (u.phone || '').toLowerCase().includes(_userFilterKeyword)
+      )
+    : users;
+
+  if (displayUsers.length === 0) {
+    wrap.innerHTML = '<div class="empty">' + (_userFilterKeyword ? '无匹配用户' : '暂无用户') + '</div>';
     return;
   }
   wrap.innerHTML = `
-    <table>
+    ${displayUsers.map(u => {
+      const memberType = u.lifetime === 1 ? '终身会员' : (u.is_paid ? '订阅用户' : '免费用户');
+      const badgeClass = u.lifetime === 1 ? 'badge-lifetime' : (u.is_paid ? 'badge-paid' : 'badge-free');
+      const expiresDisplay = u.lifetime === 1 ? '永久有效' : (u.paid_expires_at ? u.paid_expires_at.replace('T',' ').slice(0,19) : '-');
+      return `
+      <div class="user-card">
+        <div class="user-card-info">
+          <span class="lbl">ID:</span>${u.id}<br>
+          <span class="lbl">用户名:</span>${u.username || '-'}<br>
+          <span class="lbl">手机:</span><span class="phone-wrap">${maskPhone(u.phone)}<button class="phone-edit-btn" onclick="openPhoneEdit(${u.id}, '${u.phone||''}')">改</button></span><br>
+          ${!u.lifetime ? `<span class="lbl">余额:</span><span class="balance-link" onclick="showBalanceLog(${u.id}, '${u.username||''}', '${u.phone||''}')">${(u.balance||0).toFixed(1)}元</span><br>` : ''}
+          <span class="badge badge-${badgeClass}">${memberType}</span>
+          ${!u.lifetime && u.paid_expires_at ? `<br><span class="lbl">到期:</span>${expiresDisplay}` : ''}
+          <br><span class="lbl">注册:</span>${u.created_at ? u.created_at.replace('T', ' ').slice(0, 19) : '-'}
+        </div>
+        <div class="user-card-actions">
+          ${u.lifetime
+            ? `<button class="btn-sm btn-deactivate" onclick="toggleLifetime(${u.id}, false)">普通</button>`
+            : `<button class="btn-sm btn-activate" onclick="toggleLifetime(${u.id}, true)">终身</button>`}
+          ${!u.lifetime ? `<button class="btn-sm btn-activate" style="background:#dbeafe;color:#1e40af" onclick="openRechargeModal(${u.id}, '${u.username||''}', '${u.phone||''}', false)">期限</button>` : ''}
+          <button class="btn-sm btn-reset" onclick="openResetPwdConfirm(${u.id}, '${u.phone||''}')">初密</button>
+          <button class="btn-sm btn-delete" onclick="deleteUser(${u.id}, '${u.phone||''}', '${u.username||u.phone||''}')">删除</button>
+        </div>
+      </div>
+    `}).join('')}
+    <table class="user-table">
       <thead>
         <tr>
           <th>ID</th>
@@ -853,7 +976,7 @@ function renderUserTable() {
         </tr>
       </thead>
       <tbody>
-        ${users.map(u => {
+        ${displayUsers.map(u => {
           const memberType = u.lifetime === 1 ? '终身会员' : (u.is_paid ? '订阅用户' : '免费用户');
           const badgeClass = u.lifetime === 1 ? 'badge-lifetime' : (u.is_paid ? 'badge-paid' : 'badge-free');
           const expiresDisplay = u.lifetime === 1 ? '永久有效' : (u.paid_expires_at ? u.paid_expires_at.replace('T',' ').slice(0,19) : '-');
@@ -861,7 +984,9 @@ function renderUserTable() {
           <tr>
             <td>${u.id}</td>
             <td style="font-size:12px;color:#374151">${u.username || '-'}</td>
-            <td style="font-size:12px;color:#6b7280">${u.phone || '-'}</td>
+            <td style="font-size:12px;color:#6b7280">
+              <span class="phone-wrap">${u.phone || '-'}<button class="phone-edit-btn" onclick="openPhoneEdit(${u.id}, '${u.phone||''}')">改</button></span>
+            </td>
             <td style="font-size:12px;color:#6b7280"><span class="balance-link" onclick="showBalanceLog(${u.id}, '${u.username||''}', '${u.phone||''}')">${(u.balance || 0).toFixed(1)} 元</span></td>
             <td><span class="badge ${badgeClass}">${memberType}</span></td>
             <td style="font-size:12px;color:#9ca3af">${expiresDisplay}</td>
@@ -874,8 +999,7 @@ function renderUserTable() {
                 }
                 ${!u.lifetime ? `<button class="btn-sm btn-activate" style="background:#dbeafe;color:#1e40af" onclick="openRechargeModal(${u.id}, '${u.username||''}', '${u.phone||''}', false)">期限</button>` : ''}
                 <button class="btn-sm btn-reset" onclick="openResetPwdConfirm(${u.id}, '${u.phone||''}')">初密</button>
-                ${u.balance > 0 ? `<button class="btn-sm btn-deactivate" onclick="openRefundModal(${u.id}, '${u.username||''}', '${u.phone||''}')">退费</button>` : ''}
-                <button class="btn-sm btn-delete" onclick="deleteUser(${u.id}, '${u.phone||''}', '${u.username || u.phone || ''}')">删除</button>
+                      <button class="btn-sm btn-delete" onclick="deleteUser(${u.id}, '${u.phone||''}', '${u.username || u.phone || ''}')">删除</button>
               </div>
             </td>
           </tr>
@@ -918,7 +1042,7 @@ async function setPaid(phone, isPaid) {
     const resp = await fetch('/wenshu/api/user/admin/set-paid', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ phone, isPaid: isPaid ? 1 : 0, adminKey }),
+      body: JSON.stringify({ phone, isPaid: isPaid ? 1 : 0 }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error);
@@ -935,7 +1059,7 @@ async function deleteUser(userId, phone, displayName) {
     const resp = await fetch('/wenshu/api/user/admin/delete', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ userId, phone: phone || null, adminKey }),
+      body: JSON.stringify({ userId, phone: phone || null }),
     });
     const data = await resp.json();
     if (data.needRefund) {
@@ -947,6 +1071,176 @@ async function deleteUser(userId, phone, displayName) {
     await loadData();
   } catch(e) {
     toast('删除失败：' + e.message, 'error');
+  }
+}
+
+// ─── 退款申请管理 ──────────────────────────────────────────────
+let refundRequestsPage = 1;
+let refundRequestsTotal = 0;
+let refundRequestsData = [];
+
+async function renderRefundRequests(page = 1) {
+  refundRequestsPage = page;
+  $('#app').innerHTML = `
+    <header>
+      <a class="back-link" href="/wenshu">← 返回工具</a>
+      <div class="header-right">
+        <span>管理员端v3.0.2</span>
+        <button class="refresh-btn" onclick="location.reload()">刷新</button>
+        <button class="refresh-btn" onclick="renderDashboard()">管理主页</button>
+        <button class="refresh-btn" onclick="logout()">退出</button>
+      </div>
+    </header>
+    <div class="card">
+      <div class="section-title">
+        <h2>退款申请列表</h2>
+        <div style="display:flex;gap:6px">
+          <button class="refresh-btn" onclick="renderRefundRequests(1)" style="background:#e0e7ff;color:#3730a3">全部</button>
+          <button class="refresh-btn" onclick="filterRefundRequests('pending')" style="background:#fef3c7;color:#92400e">待处理</button>
+        </div>
+      </div>
+      <div id="refundRequestsList"><div class="loading">加载中...</div></div>
+    </div>
+  `;
+
+  try {
+    const resp = await fetch('/wenshu/api/user/admin/refund-requests?page=' + page, {
+      headers: headers(),
+    });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d.error || d.message);
+    refundRequestsData = d.requests || [];
+    refundRequestsTotal = d.total || 0;
+    renderRefundRequestsList();
+  } catch (e) {
+    document.getElementById('refundRequestsList').innerHTML =
+      '<div class="empty">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function filterRefundRequests(status) {
+  renderRefundRequestsFiltered(status);
+}
+
+async function renderRefundRequestsFiltered(status) {
+  document.getElementById('refundRequestsList').innerHTML = '<div class="loading">加载中...</div>';
+  try {
+    const resp = await fetch('/wenshu/api/user/admin/refund-requests?status=' + status, {
+      headers: headers(),
+    });
+    const d = await resp.json();
+    refundRequestsData = d.requests || [];
+    refundRequestsTotal = d.total || 0;
+    refundRequestsPage = 1;
+    renderRefundRequestsList();
+  } catch (e) {
+    document.getElementById('refundRequestsList').innerHTML =
+      '<div class="empty">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function renderRefundRequestsList() {
+  const el = document.getElementById('refundRequestsList');
+  if (refundRequestsData.length === 0) {
+    el.innerHTML = '<div class="empty">暂无退款申请</div>';
+    return;
+  }
+  const pageSize = 20;
+  const totalPages = Math.ceil(refundRequestsTotal / pageSize) || 1;
+  const curr = refundRequestsPage;
+  el.innerHTML = `
+    <table style="font-size:13px">
+      <thead>
+        <tr>
+          <th>用户</th>
+          <th>申请金额</th>
+          <th>系统计算</th>
+          <th>状态</th>
+          <th>申请时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${refundRequestsData.map(r => {
+          const statusColor = { pending: '#d97706', approved: '#059669', rejected: '#dc2626', completed: '#059669', failed: '#dc2626' };
+          const statusBg    = { pending: '#fef3c7', approved: '#d1fae5', rejected: '#fee2e2', completed: '#d1fae5', failed: '#fee2e2' };
+          const sc = statusColor[r.status] || '#6b7280';
+          const sbg = statusBg[r.status] || '#f3f4f6';
+          const statusLabel = { pending: '待处理', approved: '已批准', rejected: '已拒绝', completed: '已完成', failed: '失败' };
+          const isPending = r.status === 'pending';
+          const approveBtn = isPending
+            ? '<button class="btn-sm" style="background:#d1fae5;color:#065f46" onclick="doApproveRefund(' + r.id + ')">批准</button>'
+            : '';
+          const rejectBtn = isPending
+            ? '<button class="btn-sm" style="background:#fee2e2;color:#991b1b" onclick="openRejectRefund(' + r.id + ')">拒绝</button>'
+            : '';
+          const formula = r.formulaJson
+            ? '<span title="总付:' + r.formulaJson.totalPaid + '元 已消费:' + r.formulaJson.consumed + '元" style="color:#9ca3af;cursor:help">详情</span>'
+            : '-';
+          return '<tr>' +
+            '<td>' + (r.username || r.userPhone || '-') + '<br><span style="color:#9ca3af;font-size:11px">' + (r.userPhone || '') + '</span></td>' +
+            '<td style="color:#dc2626;font-weight:600">' + (Number(r.amount) || 0).toFixed(1) + '元</td>' +
+            '<td style="color:#059669;font-weight:600">' + (Number(r.computedAmount) || 0).toFixed(1) + '元</td>' +
+            '<td><span style="background:' + sbg + ';color:' + sc + ';padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">' + (statusLabel[r.status] || r.status) + '</span></td>' +
+            '<td style="color:#9ca3af;font-size:12px">' + ((r.createdAt || '').replace('T', ' ').slice(0, 19)) + '</td>' +
+            '<td><div style="display:flex;gap:4px;align-items:center">' + approveBtn + rejectBtn + (r.wxRefundNo ? '<span style="color:#9ca3af;font-size:11px">' + r.wxRefundNo + '</span>' : '') + '</div></td>' +
+          '</tr>';
+        }).join('')}
+      </tbody>
+    </table>
+    <div style="text-align:center;padding:10px 0;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:#6b7280">
+      <button onclick="renderRefundRequests(${curr - 1})" ${curr <= 1 ? 'disabled' : ''} style="padding:3px 10px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;${curr <= 1 ? 'color:#d1d5db' : ''}">上一页</button>
+      <span>第 ${curr} / ${totalPages} 页，共 ${refundRequestsTotal} 条</span>
+      <button onclick="renderRefundRequests(${curr + 1})" ${curr >= totalPages ? 'disabled' : ''} style="padding:3px 10px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;${curr >= totalPages ? 'color:#d1d5db' : ''}">下一页</button>
+    </div>
+  `;
+}
+
+let rejectRefundId = null;
+
+function openRejectRefund(id) {
+  rejectRefundId = id;
+  document.getElementById('rejectRefundId').textContent = '申请ID: ' + id;
+  document.getElementById('rejectReasonInput').value = '';
+  document.getElementById('rejectRefundError').textContent = '';
+  document.getElementById('rejectRefundModal').classList.add('active');
+}
+
+async function doApproveRefund(id) {
+  if (!confirm('确定批准该退款申请？批准后将从微信退款原路返回。')) return;
+  try {
+    const resp = await fetch('/wenshu/api/user/admin/refund-requests/' + id + '/approve', {
+      method: 'POST',
+      headers: headers(),
+    });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d.error || d.message);
+    toast('退款成功：' + d.message, 'success');
+    renderRefundRequests(refundRequestsPage);
+    if (confirm('是否需要调整该用户的订阅到期时间？')) {
+      openRechargeModal(d.userId, d.username || '', d.phone || '', false);
+    }
+  } catch (e) {
+    toast('操作失败：' + e.message, 'error');
+  }
+}
+
+async function doRejectRefund() {
+  if (!confirm('确定拒绝该退款申请？')) return;
+  const reason = document.getElementById('rejectReasonInput').value;
+  try {
+    const resp = await fetch('/wenshu/api/user/admin/refund-requests/' + rejectRefundId + '/reject', {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    const d = await resp.json();
+    if (!resp.ok) throw new Error(d.error || d.message);
+    toast('已拒绝该退款申请', 'success');
+    closeModal('rejectRefundModal');
+    renderRefundRequests(refundRequestsPage);
+  } catch (e) {
+    document.getElementById('rejectRefundError').textContent = e.message;
   }
 }
 
@@ -973,6 +1267,22 @@ render();
     </div>
     <div class="form-error" id="editPhoneError" style="color:#e63946;font-size:12px;min-height:16px;margin-bottom:8px"></div>
     <button onclick="doEditPhone()" style="width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">确认修改</button>
+  </div>
+</div>
+
+
+<!-- 拒绝退款申请 Modal -->
+<div class="modal-overlay" id="rejectRefundModal">
+  <div class="modal" style="max-width:360px">
+    <button class="modal-close" onclick="closeModal('rejectRefundModal')">&times;</button>
+    <h3 style="margin-bottom:12px">拒绝退款申请</h3>
+    <p id="rejectRefundId" style="font-size:12px;color:#6b7280;margin-bottom:10px"></p>
+    <div style="margin-bottom:12px">
+      <textarea id="rejectReasonInput" rows="3" placeholder="请输入拒绝原因（选填）"
+        style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:5px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+    </div>
+    <div class="form-error" id="rejectRefundError" style="color:#e63946;font-size:12px;min-height:16px;margin-bottom:8px"></div>
+    <button onclick="doRejectRefund()" style="width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">确认拒绝</button>
   </div>
 </div>
 

@@ -1,5 +1,5 @@
 const express = require('express');
-const { get, run } = require('../db');
+const { get, run, all } = require('../db');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
@@ -13,7 +13,7 @@ function extractCaseNumber(content) {
 
 // ─── 获取历史记录列表 ──────────────────────────────────────────────
 router.get('/', authenticate, async (req, res) => {
-  const rows = get.all('SELECT * FROM sms_history WHERE user_id=? ORDER BY created_at DESC LIMIT 50', req.user.userId);
+  const rows = all('SELECT * FROM sms_history WHERE user_id=? ORDER BY created_at DESC LIMIT 50', [req.user.userId]);
   res.json({
     history: rows.map(r => ({
       id: r.id,

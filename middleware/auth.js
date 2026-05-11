@@ -1,7 +1,9 @@
 const jwt = require('jsonwebtoken');
+const { get: dbGet, run: dbRun } = require('../db');
 
 const SECRET = process.env.JWT_SECRET || 'court-tool-jwt-secret-change-in-production';
 const EXPIRES_IN = '7d';
+const INACTIVITY_MS = 90 * 60 * 1000; // 90分钟无操作过期
 
 function generateToken(payload) {
   return jwt.sign(payload, SECRET, { expiresIn: EXPIRES_IN });
@@ -15,6 +17,29 @@ function verifyToken(token) {
   }
 }
 
+// 同步更新最后活跃时间
+function touchLastActivity(userId) {
+  try {
+    if (typeof dbRun === 'function') {
+      dbRun("UPDATE users SET last_activity = datetime('now', '+8 hours') WHERE id = ?", [userId]);
+    }
+  } catch {}
+}
+
+// 同步检查无操作过期
+function isInactive(userId) {
+  try {
+    if (typeof dbGet !== 'function') return false;
+    const user = dbGet('SELECT last_activity FROM users WHERE id = ?', [userId]);
+    if (!user || !user.last_activity) return false;
+    const last = new Date(user.last_activity).getTime();
+    if (isNaN(last)) return false;
+    return Date.now() - last > INACTIVITY_MS;
+  } catch {
+    return false;
+  }
+}
+
 function authenticate(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
@@ -24,7 +49,11 @@ function authenticate(req, res, next) {
   if (!payload) {
     return res.status(401).json({ error: '登录已过期，请重新登录' });
   }
+  if (isInactive(payload.userId)) {
+    return res.status(401).json({ error: '登录已过期，请重新登录' });
+  }
   req.user = payload;
+  touchLastActivity(payload.userId);
   next();
 }
 
@@ -32,7 +61,10 @@ function optionalAuth(req, res, next) {
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Bearer ')) {
     const payload = verifyToken(auth.slice(7));
-    if (payload) req.user = payload;
+    if (payload) {
+      req.user = payload;
+      touchLastActivity(payload.userId);
+    }
   }
   next();
 }
@@ -49,11 +81,10 @@ function requirePaid(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: '请先登录' });
   }
-  // isPaid 在 JWT 中以整数存储（0/1），由登录时根据 lifetime/paid_expires_at 计算写入
   if (!req.user.isPaid) {
     return res.status(403).json({ error: '请开通付费版以使用批量下载功能', requiresUpgrade: true });
   }
   next();
 }
 
-module.exports = { generateToken, verifyToken, authenticate, optionalAuth, requirePaid, isPaidUser, SECRET };
+module.exports = { generateToken, verifyToken, authenticate, optionalAuth, requirePaid, isPaidUser, SECRET, touchLastActivity };

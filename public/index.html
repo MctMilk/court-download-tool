@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>电子送达文书批量下载助手 v2.0</title>
+<title>电子送达文书批量下载助手 v3.0.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -543,7 +543,7 @@
 <body>
 
 <header>
-  <h1>电子送达文书批量下载助手 <span class="version-tag">v2.0.1</span></h1>
+  <h1>电子送达文书批量下载助手 <span class="version-tag">v3.0.2</span></h1>
   <p>粘贴法院发送的包含文书链接的短信内容，快速解析并准备下载。</p>
 </header>
 
@@ -552,7 +552,7 @@
     <label for="smsInput" style="margin-bottom:0">送达短信内容</label>
     <button id="historyBtn" onclick="showHistoryModal()" style="display:none;padding:2px 10px;font-size:12px;background:#e9ecef;color:#495057;border:1px solid #ced4da;border-radius:4px;cursor:pointer">历史记录</button>
   </div>
-  <textarea id="smsInput" placeholder="请在此粘贴完整的法院送达短信..."></textarea>
+  <textarea id="smsInput" placeholder="请在此粘贴完整的法院送达短信..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doParse()}"></textarea>
   <button class="btn" id="parseBtn" onclick="doParse()">
     <span id="parseBtnText">解析文书列表</span>
   </button>
@@ -570,6 +570,7 @@
         <span class="badge" id="userBadge"></span>
         <button class="btn-logout" id="logoutBtn" onclick="logout()">退出</button>
         <button class="btn-link" id="upgradeLink" onclick="showUpgradeModal()" style="display:none">升级付费版</button>
+        <button class="btn-link" id="subDetailLink" onclick="showSubDetailModal()" style="display:none;color:#2563eb;font-size:13px">订阅详情</button>
         <button class="invite-tag" id="inviteTag" onclick="showInviteModal()" style="display:none">邀请</button>
       </div>
       <button class="toolbar-btn" id="selectAllBtn" style="display:none" onclick="toggleSelectAll()">
@@ -617,11 +618,11 @@
     <div id="loginForm">
       <div class="form-group">
         <label>手机号</label>
-        <input type="tel" id="loginPhone" placeholder="请输入手机号" maxlength="11" autocomplete="username">
+        <input type="tel" id="loginPhone" placeholder="请输入手机号" maxlength="11" autocomplete="username" autofocus>
       </div>
       <div class="form-group">
         <label>密码</label>
-        <input type="password" id="loginPwd" placeholder="请输入密码" autocomplete="current-password">
+        <input type="password" id="loginPwd" placeholder="请输入密码" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin()}">
       </div>
 
       <!-- 验证码区（needSmsCode 时显示） -->
@@ -629,8 +630,8 @@
         <div class="form-group">
           <label>短信验证码 <span style="font-size:12px;color:#6c757d">（检测到新设备，请验证）</span></label>
           <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="loginCode" placeholder="请输入6位验证码" maxlength="6" autocomplete="off" style="flex:1">
-            <button class="btn-sm" id="loginSendBtn" onclick="sendCode('login')" style="background:#e9ecef;color:#495057;padding:9px 12px;font-size:12px;border:1px solid #ced4da;flex-shrink:0;white-space:nowrap">获取验证码</button>
+            <input type="text" id="loginCode" placeholder="请输入6位验证码" maxlength="6" autocomplete="off" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin()}">
+            <button class="btn-sm" id="loginSendBtn" onclick="sendLoginCode()" style="background:#e9ecef;color:#495057;padding:9px 12px;font-size:12px;border:1px solid #ced4da;flex-shrink:0;white-space:nowrap">获取验证码</button>
           </div>
         </div>
       </div>
@@ -711,6 +712,17 @@
         </label>
       </div>
       <button class="btn btn-success" style="width:100%" id="payBtn" onclick="initiatePayment()">立即支付</button>
+
+      <div style="margin-top:16px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#6b7280;line-height:1.7">
+        <strong style="color:#374151">计费说明</strong><br>
+        • 月度：5元/月；一次性充≥10个月自动折算为年度<br>
+        • 年度：1年=50元，2年=80元，3年=105元<br>
+        <strong style="color:#374151;margin-top:6px;display:inline-block">退款政策</strong><br>
+        • 订阅周期当期一旦使用不予退款<br>
+        • 年度订阅首年开始后即扣除首年费用（50元），退款仅可退余额<br>
+        • 退款不影响当期会员时间<br>
+        • 点击上方「订阅详情」查看余额流水和申请退款
+      </div>
     </div>
 
     <!-- State 1: 加载中 -->
@@ -740,7 +752,80 @@
     <div id="payState4" style="display:none;text-align:center;padding:24px 0">
       <div style="font-size:48px;margin-bottom:12px">❌</div>
       <p id="payErrorMsg" style="font-size:15px;color:#dc2626;margin-bottom:16px"></p>
+      <details id="payDebugDetails" style="text-align:left;background:#f8f8f8;border:1px solid #e5e7eb;border-radius:6px;padding:10px;margin-bottom:16px;font-size:12px;font-family:monospace;max-height:200px;overflow-y:auto">
+        <summary style="cursor:pointer;color:#666;font-weight:bold">调试信息（点击展开）</summary>
+        <pre id="payDebugContent" style="margin:8px 0 0;color:#374151;white-space:pre-wrap;word-break:break-all"></pre>
+      </details>
       <button class="btn" style="width:100%;background:#f5f5f5;color:#666;border:1px solid #ddd" onclick="resetPaymentModal()">重新发起支付</button>
+    </div>
+  </div>
+</div>
+
+<!-- 订阅详情 Modal -->
+<div class="modal-overlay" id="subDetailModal">
+  <div class="modal" style="max-width:600px;max-height:90vh;overflow-y:auto">
+    <button class="modal-close" onclick="closeModal('subDetailModal')">&times;</button>
+    <h2 style="text-align:center;margin-bottom:16px">订阅详情</h2>
+
+    <!-- 终身会员 -->
+    <div id="subDetailLifetime" style="display:none;text-align:center;padding:40px 0">
+      <p style="font-size:16px;color:#d97706">尊贵的终身会员，感谢您的大力支持！</p>
+    </div>
+
+    <!-- 普通用户内容 -->
+    <div id="subDetailContent" style="display:none">
+      <!-- 1. 套餐选项（与升级订阅相同） -->
+      <h3 style="font-size:14px;color:#374151;margin-bottom:8px">套餐选项</h3>
+      <div id="subDetailPlans" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+        <label class="recharge-option">
+          <input type="radio" name="subDetailRechargeType" value="monthly:1"> 按月充值 — <strong>5元/月</strong>
+        </label>
+        <label class="recharge-option">
+          <input type="radio" name="subDetailRechargeType" value="yearly:1" checked> 按年充值（1年） — <strong>50元/年</strong>
+        </label>
+        <label class="recharge-option">
+          <input type="radio" name="subDetailRechargeType" value="yearly:2"> 按年充值（2年） — <strong>80元</strong>（8折）
+        </label>
+        <label class="recharge-option">
+          <input type="radio" name="subDetailRechargeType" value="yearly:3"> 按年充值（3年） — <strong>105元</strong>（7折）
+        </label>
+      </div>
+      <button class="btn btn-success" style="width:100%;margin-bottom:20px" id="subDetailPayBtn" onclick="subDetailPay()">立即支付</button>
+
+      <!-- 2. 余额流水 -->
+      <h3 style="font-size:14px;color:#374151;margin-bottom:8px">余额流水</h3>
+      <div id="balanceLogList" style="max-height:200px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px">
+        <div style="text-align:center;padding:24px;color:#9ca3af;font-size:14px">加载中…</div>
+      </div>
+
+      <!-- 3. 计费规则（简化版） -->
+      <div style="padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:13px;color:#1e40af;line-height:1.8;margin-bottom:8px">
+        <strong>计费规则</strong><br>
+        • 月度套餐：5元/月，每日扣1元，每完整月封顶5元<br>
+        • 年度套餐：1年=50元，每日扣0.5元，每完整月封顶5元<br>
+        <strong style="margin-top:4px;display:inline-block">退款规则</strong><br>
+        • 退款 = 已付金额 - 已消费金额（每完整月封顶5元）<br>
+        • 退款申请由管理员审核，原路返回微信<br>
+        • 退款成功后订阅保留至到期日，届时自动停止
+      </div>
+      <p style="font-size:12px;text-align:center;margin-bottom:16px;display:flex;justify-content:center;gap:16px;align-items:center">
+        <a href="javascript:void(0)" onclick="alert('完整规则请联系管理员获取：会员订阅、退费及邀请奖励规则.md')" style="color:#9ca3af;text-decoration:underline">查看完整会员规则</a>
+        <span id="showRefundBtnWrapper" style="display:none">
+          <a id="showRefundBtn" href="javascript:void(0)" onclick="showRefundPanel()" style="font-size:13px;color:#9ca3af;text-decoration:underline">我要退费</a>
+        </span>
+      </p>
+
+      <!-- 4. 我要退费展开面板 -->
+      <div id="refundPanel" style="display:none;padding:16px;background:#fef9f9;border:1px solid #fecaca;border-radius:8px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-size:14px;color:#374151">可退金额</span>
+          <span id="refundableAmount" style="font-size:20px;font-weight:bold;color:#16a34a">—</span>
+        </div>
+        <p style="font-size:12px;color:#9ca3af;margin-bottom:12px">退款申请提交后由管理员审核，款项原路返回微信支付账户</p>
+        <button class="btn" id="doRefundBtn" onclick="doUserRefund()" style="width:100%;background:#dc2626;color:#fff;border:none">确认申请退费</button>
+      </div>
+
+      <p id="pendingTip" style="font-size:12px;color:#d97706;display:none;margin-bottom:8px">已有退款申请正在处理中，请等待管理员审核</p>
     </div>
   </div>
 </div>
@@ -764,6 +849,26 @@
   </div>
 </div>
 
+<!-- 数学验证码 Modal（防机器刷短信） -->
+<div class="modal-overlay" id="mathCaptchaModal">
+  <div class="modal" style="max-width:400px">
+    <button class="modal-close" onclick="closeModal('mathCaptchaModal')">&times;</button>
+    <h2 style="text-align:center;margin-bottom:8px;font-size:17px">安全验证</h2>
+    <p style="text-align:center;color:#6b7280;font-size:13px;margin-bottom:12px">请看图计算结果并填写答案</p>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <img id="captchaImg" src="" alt="验证码" style="flex:1;border:2px solid #e5e7eb;border-radius:8px;cursor:pointer;max-height:80px;object-fit:contain;background:#f9fafb" onclick="openMathCaptcha(captchaData.purpose)" title="看不清？点击换一题">
+      <button onclick="openMathCaptcha(captchaData.purpose)" style="padding:6px 12px;background:#e5e7eb;color:#374151;border:1px solid #d1d5db;border-radius:5px;font-size:13px;cursor:pointer;white-space:nowrap">换一题</button>
+    </div>
+    <div class="form-group">
+      <label>你的答案</label>
+      <input type="number" id="captchaAnswer" placeholder="请输入计算结果" autocomplete="off" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:5px;font-size:15px;font-family:inherit;box-sizing:border-box" onkeydown="if(event.key==='Enter'){submitMathCaptcha()}">
+    </div>
+    <div id="captchaError" style="color:#e63946;font-size:12px;min-height:18px;margin-bottom:8px"></div>
+    <button class="btn" id="captchaSubmitBtn" onclick="submitMathCaptcha()" style="width:100%">验证并发送</button>
+    <p style="text-align:center;color:#9ca3af;font-size:12px;margin-top:10px">验证码将发至你输入的手机号</p>
+  </div>
+</div>
+
 <!-- 忘记密码 Modal -->
 <div class="modal-overlay" id="forgotPwdModal">
   <div class="modal">
@@ -776,7 +881,7 @@
         <label>注册手机号</label>
         <div style="display:flex;gap:8px;align-items:center">
           <input type="tel" id="forgotPhone" placeholder="请输入手机号" maxlength="11" style="flex:1">
-          <button class="btn-sm" id="forgotSendBtn" onclick="sendCode('resetpwd')" style="background:#e9ecef;color:#495057;padding:9px 12px;font-size:12px;border:1px solid #ced4da;flex-shrink:0">获取验证码</button>
+          <button class="btn-sm" id="forgotSendBtn" onclick="openMathCaptcha('resetpwd')" style="background:#e9ecef;color:#495057;padding:9px 12px;font-size:12px;border:1px solid #ced4da;flex-shrink:0">获取验证码</button>
         </div>
       </div>
       <div class="form-error" id="forgotError"></div>
@@ -785,15 +890,20 @@
     <!-- Step 2: 输入验证码 + 新密码 -->
     <div id="forgotStep2" style="display:none">
       <div class="form-group">
-        <label>验证码</label>
+        <label>验证码 <span id="forgotCodeHint" style="font-size:12px;color:#6b7280;font-weight:normal"></span></label>
         <input type="text" id="forgotCode" placeholder="请输入6位验证码" maxlength="6" autocomplete="off">
       </div>
       <div class="form-group">
         <label>新密码（至少6位）</label>
-        <input type="password" id="forgotNewPwd" placeholder="设置新密码" autocomplete="new-password">
+        <input type="password" id="forgotNewPwd" placeholder="设置新密码" autocomplete="new-password" oninput="checkForgotPwdMatch()">
+      </div>
+      <div class="form-group">
+        <label>确认新密码</label>
+        <input type="password" id="forgotNewPwd2" placeholder="再次输入新密码" autocomplete="new-password" oninput="checkForgotPwdMatch()">
+        <div id="forgotPwdMatchTip" style="font-size:12px;margin-top:4px;min-height:16px"></div>
       </div>
       <div class="form-error" id="forgotError2"></div>
-      <button class="btn" onclick="doResetPwd()">确认重置密码</button>
+      <button class="btn" id="forgotSubmitBtn" onclick="doResetPwd()" disabled style="opacity:0.5;cursor:not-allowed">确认重置密码</button>
     </div>
 
     <div style="margin-top:16px;text-align:center;font-size:13px;color:#6b757d">
@@ -862,6 +972,94 @@
 </div>
 
 <script>
+const API = 'http://localhost:3847/api';
+let allFiles = [];
+let selectedFiles = new Set();
+
+function getExtStyle(ext) {
+  const map = {
+    'pdf': 'ext-pdf', 'doc': 'ext-doc', 'docx': 'ext-docx',
+    'xls': 'ext-xls', 'xlsx': 'ext-xlsx', 'ppt': 'ext-ppt', 'pptx': 'ext-pptx',
+    'zip': 'ext-zip', 'rar': 'ext-zip', '7z': 'ext-zip',
+    'jpg': 'ext-jpg', 'jpeg': 'ext-jpg', 'png': 'ext-jpg', 'gif': 'ext-jpg',
+  };
+  return map[ext] || 'ext-default';
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('errorBox').style.display = 'none';
+}
+
+function showProgress(pct, text) {
+  const wrap = document.getElementById('progressWrap');
+  wrap.classList.add('active');
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressText').textContent = text;
+}
+
+function hideProgress() {
+  document.getElementById('progressWrap').classList.remove('active');
+}
+
+async function scrape() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { showError('请先粘贴链接'); return; }
+  hideError();
+
+  const btn = document.getElementById('scrapeBtn');
+  btn.disabled = true;
+  btn.textContent = '解析中...';
+  document.getElementById('fileCard').style.display = 'none';
+  document.getElementById('expiredCard').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'block';
+  document.getElementById('emptyState').innerHTML = '<div class="spinner"></div>正在解析法院送达短信，请稍候...';
+
+  try {
+    const resp = await fetch(API + '/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '解析失败');
+
+    if (data.expired) {
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('expiredCard').style.display = 'block';
+      return;
+    }
+
+    allFiles = data.files;
+    selectedFiles.clear();
+    renderFileList();
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('fileCard').style.display = 'block';
+    document.getElementById('totalCount').textContent = allFiles.length;
+
+    if (allFiles.length === 0) {
+      showError('未找到文书文件，请确认链接是否正确。');
+    } else if (data.expiresAt) {
+      const toolbar = document.querySelector('.file-toolbar .info');
+      if (toolbar) {
+        toolbar.innerHTML += ` &nbsp;&nbsp; 下载链接有效期至：<strong style="color:#e53935">${data.expiresAt}</strong>`;
+      }
+    }
+  } catch (e) {
+    showError('解析失败：' + e.message);
+    document.getElementById('emptyState').innerHTML = '粘贴链接后点击「解析文书」，文件列表将显示在这里';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '解析文书';
+    hideProgress();
+  }
+}
+
 // ─── Auth State ───────────────────────────────────────────────────────
 // ─── Device Fingerprint ─────────────────────────────────────────────
 function getDeviceFingerprint() {
@@ -908,13 +1106,27 @@ window.deviceFP = localStorage.getItem('ct_device_fp') || (() => {
 
   if (token) {
     fetch('' + API_BASE + '/api/user/me', { headers: authHeaders() })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(user => { currentUser = user; updateUserBar(); })
-      .catch(() => { token = null; localStorage.removeItem('ct_token'); updateDownloadBtnState(); });
+      .then(r => { console.log('[/me init] status=' + r.status); return r.ok ? r.json() : r.text().then(t => Promise.reject({ status: r.status, body: t })); })
+      .then(user => { console.log('[/me init] success, user=' + JSON.stringify(user).slice(0, 80)); currentUser = user; updateUserBar(); startHeartbeat(); })
+      .catch(e => { console.error('[/me init] FAILED', e); token = null; localStorage.removeItem('ct_token'); updateDownloadBtnState(); });
   } else {
+    console.log('[init] no token, showing auth modal');
     updateDownloadBtnState();
   }
 })();
+
+// ─── 心跳：每5分钟刷新活跃时间，续期90分钟 ──────────────────────────
+let _heartbeatTimer = null;
+function startHeartbeat() {
+  if (_heartbeatTimer) clearInterval(_heartbeatTimer);
+  _heartbeatTimer = setInterval(() => {
+    if (!token) { clearInterval(_heartbeatTimer); return; }
+    fetch('' + API_BASE + '/api/user/me', { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject({ status: r.status, body: t })))
+      .then(user => { console.log('[heartbeat] ok, user=' + JSON.stringify(user).slice(0, 80)); currentUser = user; updateUserBar(); })
+      .catch(e => { console.error('[heartbeat] FAILED', e); });
+  }, 5 * 60 * 1000); // 5分钟
+}
 
 function authHeaders() {
   const h = { 'Content-Type': 'application/json' };
@@ -945,6 +1157,8 @@ function updateUserBar() {
       badgeEl.title = '';
     }
     upgradeLink.style.display = currentUser.isPaid ? 'none' : 'inline';
+    const subDetailLink = document.getElementById('subDetailLink');
+    if (subDetailLink) subDetailLink.style.display = currentUser.isPaid ? 'inline' : 'none';
     const inviteTag = document.getElementById('inviteTag');
     if (inviteTag) { inviteTag.style.display = 'inline'; inviteTag.onclick = showInviteModal; }
     const historyBtn = document.getElementById('historyBtn');
@@ -952,6 +1166,8 @@ function updateUserBar() {
   } else {
     bar.style.display = 'none';
     upgradeLink.style.display = 'none';
+    const subDetailLink = document.getElementById('subDetailLink');
+    if (subDetailLink) subDetailLink.style.display = 'none';
     const inviteTag = document.getElementById('inviteTag');
     if (inviteTag) inviteTag.style.display = 'none';
     const historyBtn = document.getElementById('historyBtn');
@@ -976,20 +1192,27 @@ async function showHistoryModal() {
       return;
     }
 
-    list.innerHTML = data.history.map(item => {
+    list.innerHTML = data.history.map((item, idx) => {
       const court = item.court || '未知法院';
       const caseNum = item.caseNumber || '未知案号';
       const docCount = item.docCount || 0;
       const time = item.createdAt ? item.createdAt.replace('T', ' ').slice(0, 16) : '';
-      const contentEsc = item.content.replace(/"/g, '&quot;');
+      const contentAttr = (item.content || '').replace(/"/g, '&quot;');
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:13px;gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-weight:500;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${court}</div>
           <div style="color:#9ca3af;font-size:12px">${caseNum} · ${docCount}份文书 · ${time}</div>
         </div>
-        <button class="btn-sm btn-success" style="flex-shrink:0" onclick="reshowFromHistory(\&quot;${contentEsc}\&quot;)">重新解析</button>
+        <button style="flex-shrink:0;padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer" data-history-content="${contentAttr}">重新解析</button>
       </div>`;
     }).join('');
+
+    // 事件代理，避免内联 onclick
+    list.querySelectorAll('button[data-history-content]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        reshowFromHistory(btn.dataset.historyContent);
+      });
+    });
   } catch(e) {
     list.innerHTML = '<div style="text-align:center;color:#e63946;padding:20px">加载失败</div>';
   }
@@ -1022,6 +1245,8 @@ function showAuthModal() {
   document.getElementById('loginCodeSection').style.display = 'none';
   document.getElementById('loginError').textContent = '';
   openModal('authModal');
+  // 等 modal 动画完成后聚焦手机号输入框
+  setTimeout(() => document.getElementById('loginPhone').focus(), 50);
 }
 
 function switchTab(tab) {
@@ -1083,6 +1308,7 @@ async function doLogin() {
     // 登录成功
     token = data.token;
     localStorage.setItem('ct_token', token);
+    console.log('[login] token saved, len=' + token.length + ', user=' + JSON.stringify(data.user).slice(0, 100));
     // 保存设备指纹
     localStorage.setItem('ct_device_fp', window.deviceFP);
     currentUser = data.user;
@@ -1128,6 +1354,7 @@ async function doRegister() {
 
     token = data.token;
     localStorage.setItem('ct_token', token);
+    console.log('[register] token saved, len=' + token.length);
     currentUser = data.user;
     updateUserBar();
     closeModal('authModal');
@@ -1176,6 +1403,110 @@ function showUpgradeModal() {
   openModal('upgradeModal');
 }
 
+// ─── 订阅详情 Modal ───────────────────────────────────────────────────
+async function showSubDetailModal() {
+  openModal('subDetailModal');
+  document.getElementById('subDetailLifetime').style.display = 'none';
+  document.getElementById('subDetailContent').style.display = '';
+  document.getElementById('refundableAmount').textContent = '—';
+  document.getElementById('balanceLogList').innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af;font-size:14px">加载中…</div>';
+  document.getElementById('showRefundBtnWrapper').style.display = 'none';
+  document.getElementById('refundPanel').style.display = 'none';
+  document.getElementById('pendingTip').style.display = 'none';
+
+  try {
+    const res = await fetch('/wenshu/api/payment/balance-log', {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    const data = await res.json();
+
+    // 终身用户
+    if (data.lifetime) {
+      document.getElementById('subDetailContent').style.display = 'none';
+      document.getElementById('subDetailLifetime').style.display = '';
+      return;
+    }
+
+    // 余额流水
+    const list = document.getElementById('balanceLogList');
+    if (!data.logs || data.logs.length === 0) {
+      list.innerHTML = '<div style="text-align:center;padding:24px;color:#9ca3af;font-size:14px">暂无流水记录</div>';
+    } else {
+      list.innerHTML = data.logs.map(l => {
+        const sign = l.type === '微信退款' ? '+' : (l.amount > 0 ? '+' : '');
+        const color = l.type === '微信退款' ? '#16a34a' : (l.amount > 0 ? '#374151' : '#dc2626');
+        const d = new Date(l.createdAt).toLocaleString('zh-CN', { hour12: false });
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #f3f4f6;font-size:13px">
+          <div>
+            <div style="color:#374151;font-weight:500">${l.description || l.type}</div>
+            <div style="color:#9ca3af;font-size:11px">${d}</div>
+          </div>
+          <div style="color:${color};font-weight:bold">${sign}${l.amount.toFixed(1)}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // 待处理申请
+    if (data.hasPendingRequest) {
+      document.getElementById('pendingTip').style.display = '';
+      return;
+    }
+
+    // 始终显示"我要退费"
+    document.getElementById('refundableAmount').textContent = (data.refundable || 0).toFixed(1) + ' 元';
+    document.getElementById('showRefundBtnWrapper').style.display = '';
+  } catch (e) {
+    document.getElementById('balanceLogList').innerHTML =
+      '<div style="text-align:center;padding:24px;color:#dc2626;font-size:14px">加载失败</div>';
+  }
+}
+
+function showRefundPanel() {
+  document.getElementById('showRefundBtn').style.display = 'none';
+  document.getElementById('refundPanel').style.display = '';
+}
+
+// 订阅详情页快捷充值
+let _subDetailTradeNo = '';
+async function subDetailPay() {
+  const radios = document.getElementsByName('subDetailRechargeType');
+  let selected = '';
+  for (const r of radios) { if (r.checked) { selected = r.value; break; } }
+  if (!selected) { alert('请选择套餐'); return; }
+  const [type, months] = selected.split(':');
+  openModal('upgradeModal');
+  // 同步选中到升级弹窗
+  const upgradeRadios = document.getElementsByName('rechargeType');
+  for (const r of upgradeRadios) { r.checked = r.value === selected; }
+  initiatePayment();
+}
+
+async function doUserRefund() {
+  if (!confirm('确定提交退款申请？申请提交后由管理员审核，款项原路返回微信支付账户。')) return;
+  const btn = document.getElementById('doRefundBtn');
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+  try {
+    const res = await fetch('/wenshu/api/payment/refund-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert('申请失败：' + (data.error || '未知错误'));
+      btn.disabled = false;
+      btn.textContent = '确认申请退费';
+    } else {
+      alert('退款申请已提交，等待管理员审核。');
+      closeModal('subDetailModal');
+    }
+  } catch (e) {
+    alert('请求失败：' + e.message);
+    btn.disabled = false;
+    btn.textContent = '确认申请退费';
+  }
+}
+
 let _paymentTradeNo = '';
 let _paymentPollTimer = null;
 let _paymentPollCount = 0;
@@ -1202,7 +1533,7 @@ async function initiatePayment() {
   try {
     const resp = await fetch('/wenshu/api/payment/create', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ type: selectedType, months: selectedMonths }),
     });
     const data = await resp.json();
@@ -1210,7 +1541,12 @@ async function initiatePayment() {
       if (resp.status === 400 && data.error.includes('终身')) {
         showPayError('您已是终身会员，无需续费');
       } else {
-        showPayError(data.error || '创建订单失败');
+        showPayError(data.error || '创建订单失败', {
+          httpStatus: resp.status,
+          response: data,
+          _debug: data._debug,
+          request: { type: selectedType, months: selectedMonths },
+        });
       }
       return;
     }
@@ -1232,7 +1568,11 @@ async function initiatePayment() {
     // 开始轮询
     pollPaymentStatus();
   } catch(e) {
-    showPayError('网络异常，请稍后重试');
+    showPayError('网络异常，请稍后重试', {
+      error: e.message,
+      type: selectedType,
+      months: selectedMonths,
+    });
   }
 }
 
@@ -1247,13 +1587,19 @@ function showPaySuccess() {
   setTimeout(() => { closeModal('upgradeModal'); resetPaymentModal(); }, 2500);
 }
 
-function showPayError(msg) {
+function showPayError(msg, debug) {
   document.getElementById('payState0').style.display = 'none';
   document.getElementById('payState1').style.display = 'none';
   document.getElementById('payState2').style.display = 'none';
   document.getElementById('payState3').style.display = 'none';
   document.getElementById('payState4').style.display = '';
   document.getElementById('payErrorMsg').textContent = msg;
+  if (debug) {
+    document.getElementById('payDebugContent').textContent = JSON.stringify(debug, null, 2);
+    document.getElementById('payDebugDetails').style.display = 'block';
+  } else {
+    document.getElementById('payDebugDetails').style.display = 'none';
+  }
 }
 
 function cancelPayment() {
@@ -1261,7 +1607,7 @@ function cancelPayment() {
   if (_paymentTradeNo) {
     fetch('/wenshu/api/payment/close/' + _paymentTradeNo, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+      headers: { 'Authorization': 'Bearer ' + token },
     }).catch(() => {});
   }
   resetPaymentModal();
@@ -1286,13 +1632,15 @@ function pollPaymentStatus() {
   _paymentPollTimer = setInterval(async () => {
     try {
       const resp = await fetch('/wenshu/api/payment/order/' + _paymentTradeNo, {
-        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+        headers: { 'Authorization': 'Bearer ' + token },
       });
       const data = await resp.json();
       if (data.status === 'paid') { clearInterval(_paymentPollTimer); showPaySuccess(); return; }
       if (data.status === 'closed') { clearInterval(_paymentPollTimer); showPayError('订单已超时'); return; }
       document.getElementById('payPollingStatus').textContent = '等待支付中… (' + Math.floor(_paymentPollCount * 3 / 60) + 'm)';
-    } catch {}
+    } catch(e) {
+      // 网络异常静默，不影响轮询
+    }
     _paymentPollCount++;
     if (_paymentPollCount >= 600) { clearInterval(_paymentPollTimer); showPayError('订单超时，请重新发起'); }
   }, 3000);
@@ -1424,26 +1772,88 @@ function copyInviteLink() {
   showStatus(ok ? '邀请链接已复制' : '链接：' + link, ok ? 'success' : 'info');
 }
 
-// ─── Send SMS Code ────────────────────────────────────────────────────
+// ─── 数学验证码弹窗 ─────────────────────────────────────────────────
 let sendCodeTimers = {};
+let captchaData = { id: '', phone: '', purpose: '' };
 
-function sendCode(purpose) {
-  const phoneElMap = { register: 'regPhone', forgotpwd: 'forgotPhone', login: 'loginPhone' };
-  const btnElMap = { register: 'regSendBtn', forgotpwd: 'forgotSendBtn', login: 'loginSendBtn' };
-  const phoneElId = phoneElMap[purpose];
-  const btnElId = btnElMap[purpose];
-  if (!phoneElId || !btnElId) return;
-  const phone = document.getElementById(phoneElId).value.trim();
-
+async function openMathCaptcha(purpose) {
+  const phoneElMap = { register: 'regPhone', resetpwd: 'forgotPhone', login: 'loginPhone' };
+  const phone = document.getElementById(phoneElMap[purpose]).value.trim();
   if (!phone) { alert('请先输入手机号'); return; }
   if (!/^1[3-9]\d{9}$/.test(phone)) { alert('手机号格式不正确'); return; }
+  captchaData.phone = phone;
+  captchaData.purpose = purpose;
 
-  const btn = document.getElementById(btnElId);
+  try {
+    const r = await fetch('/wenshu/api/sms/captcha');
+    const d = await r.json();
+    captchaData.id = d.captchaId;
+    document.getElementById('captchaImg').src = d.image;
+    document.getElementById('captchaAnswer').value = '';
+    document.getElementById('captchaError').textContent = '';
+    document.getElementById('mathCaptchaModal').classList.add('active');
+  } catch {
+    alert('获取安全验证失败，请稍后重试');
+  }
+}
+
+async function submitMathCaptcha() {
+  const answer = document.getElementById('captchaAnswer').value.trim();
+  if (!answer) { document.getElementById('captchaError').textContent = '请输入答案'; return; }
+  document.getElementById('captchaError').textContent = '';
+  const btn = document.getElementById('captchaSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = '验证中...';
+  try {
+    const r = await fetch('/wenshu/api/sms/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: captchaData.phone,
+        purpose: captchaData.purpose,
+        captchaId: captchaData.id,
+        captchaAnswer: answer,
+        deviceFingerprint: window.deviceFP,
+      }),
+    });
+    const d = await r.json();
+    btn.disabled = false;
+    btn.textContent = '验证并发送';
+    if (!d.success) {
+      if (d.needCaptcha) {
+        // captcha 失效，重新获取
+        document.getElementById('captchaError').textContent = d.error + '，正在重新获取...';
+        openMathCaptcha(captchaData.purpose);
+      } else {
+        document.getElementById('captchaError').textContent = d.error;
+      }
+      return;
+    }
+    closeModal('mathCaptchaModal');
+    // 触发倒计时
+    startSendCountdown(captchaData.purpose);
+    if (captchaData.purpose === 'resetpwd') {
+      onForgotCodeSent();
+    } else if (captchaData.purpose === 'login' && d.success) {
+      // 登录验证码发出后，实际登录由 doLogin 处理，这里只发短信
+    }
+  } catch {
+    btn.disabled = false;
+    btn.textContent = '验证并发送';
+    document.getElementById('captchaError').textContent = '网络错误，请重试';
+  }
+}
+
+// 倒计时
+function startSendCountdown(purpose) {
+  const btnElMap = { register: 'regSendBtn', resetpwd: 'forgotSendBtn', login: 'loginSendBtn' };
+  const btn = document.getElementById(btnElMap[purpose]);
+  if (!btn) return;
   let countdown = 60;
   btn.disabled = true;
   btn.textContent = countdown + '秒后重发';
-
-  const tick = () => {
+  clearInterval(sendCodeTimers[purpose]);
+  sendCodeTimers[purpose] = setInterval(() => {
     countdown--;
     if (countdown <= 0) {
       btn.disabled = false;
@@ -1452,28 +1862,73 @@ function sendCode(purpose) {
     } else {
       btn.textContent = countdown + '秒后重发';
     }
-  };
-  tick();
-  sendCodeTimers[purpose] = setInterval(tick, 1000);
+  }, 1000);
+}
 
-  fetch('' + API_BASE + '/api/sms/send-code', {
+// 简化版 sendCode（仅注册流程）
+function sendCode(purpose, onSuccess) {
+  if (purpose !== 'register') return; // resetpwd/login 走 openMathCaptcha 流程
+  const phoneElMap = { register: 'regPhone' };
+  const btnElMap = { register: 'regSendBtn' };
+  const phone = document.getElementById(phoneElMap[purpose]).value.trim();
+  if (!phone) { alert('请先输入手机号'); return; }
+  if (!/^1[3-9]\d{9}$/.test(phone)) { alert('手机号格式不正确'); return; }
+
+  const btn = document.getElementById(btnElMap[purpose]);
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+
+  fetch('/wenshu/api/sms/send-code', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, purpose }),
+    body: JSON.stringify({ phone, purpose, deviceFingerprint: window.deviceFP }),
   })
     .then(r => r.json())
     .then(data => {
       if (!data.success) {
-        clearInterval(sendCodeTimers[purpose]);
-        btn.disabled = false;
-        btn.textContent = '获取验证码';
-        alert(data.error || '发送失败，请稍后重试');
+        if (data.needCaptcha) {
+          openMathCaptcha(purpose);
+        } else {
+          // 频率限制等错误：启动60秒倒计时，用户看到还要等多久
+          startSendCountdown(purpose);
+        }
+      } else {
+        startSendCountdown(purpose);
+        if (onSuccess) onSuccess();
       }
     })
     .catch(() => {
-      clearInterval(sendCodeTimers[purpose]);
       btn.disabled = false;
       btn.textContent = '获取验证码';
+      alert('网络异常，请稍后重试');
+    });
+}
+
+// 登录验证码（不触发图形验证码）
+function sendLoginCode() {
+  const phone = document.getElementById('loginPhone').value.trim();
+  if (!phone) { alert('请先输入手机号'); return; }
+  if (!/^1[3-9]\d{9}$/.test(phone)) { alert('手机号格式不正确'); return; }
+  const btn = document.getElementById('loginSendBtn');
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  fetch('/wenshu/api/sms/send-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, purpose: 'login', deviceFingerprint: window.deviceFP }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        startSendCountdown('login');
+      } else {
+        startSendCountdown('login');
+      }
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.textContent = '获取验证码';
+      alert('网络异常，请稍后重试');
     });
 }
 
@@ -1489,30 +1944,43 @@ function showForgotPwdModal() {
   openModal('forgotPwdModal');
 }
 
-function doForgotPwd() {
+function onForgotCodeSent() {
+  document.getElementById('forgotStep1').style.display = 'none';
+  document.getElementById('forgotStep2').style.display = 'block';
   const phone = document.getElementById('forgotPhone').value.trim();
-  if (!phone) { document.getElementById('forgotError').textContent = '请输入手机号'; return; }
-  if (!/^1[3-9]\d{9}$/.test(phone)) { document.getElementById('forgotError').textContent = '手机号格式不正确'; return; }
+  if (phone.length >= 4) {
+    document.getElementById('forgotCodeHint').textContent = '（向' + phone.slice(-4) + '尾号手机发送）';
+  }
+}
 
-  fetch('' + API_BASE + '/api/auth/forgot-password', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone }),
-  })
-    .then(r => r.json())
-    .then(data => {
-      if (data.error) {
-        document.getElementById('forgotError').textContent = data.error;
-      } else {
-        document.getElementById('forgotStep1').style.display = 'none';
-        document.getElementById('forgotStep2').style.display = 'block';
-        // 自动触发发验证码
-        sendCode('resetpwd');
-      }
-    })
-    .catch(() => {
-      document.getElementById('forgotError').textContent = '请求失败，请稍后重试';
-    });
+function checkForgotPwdMatch() {
+  const p1 = document.getElementById('forgotNewPwd').value;
+  const p2 = document.getElementById('forgotNewPwd2').value;
+  const tip = document.getElementById('forgotPwdMatchTip');
+  const btn = document.getElementById('forgotSubmitBtn');
+  if (!p2) {
+    tip.textContent = '';
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+    return;
+  }
+  if (p1 === p2 && p1.length >= 6) {
+    tip.textContent = '';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  } else if (p1 !== p2) {
+    tip.innerHTML = '<span style="color:#e63946">两次密码不一致</span>';
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+  } else {
+    tip.innerHTML = '<span style="color:#d97706">密码至少6位</span>';
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+  }
 }
 
 function doResetPwd() {
@@ -1525,14 +1993,14 @@ function doResetPwd() {
   if (!code || code.length !== 6) { errEl.textContent = '请输入6位验证码'; return; }
   if (!password || password.length < 6) { errEl.textContent = '密码至少6位'; return; }
 
-  fetch('' + API_BASE + '/api/auth/reset-password', {
+  fetch('/wenshu/api/auth/reset-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phone, code, password }),
   })
-    .then(r => r.json())
-    .then(data => {
-      if (!r.ok) { errEl.textContent = data.error; return; }
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok || data.error) { errEl.textContent = data.error || '请求失败'; return; }
       closeModal('forgotPwdModal');
       showStatus('密码重置成功，请使用手机号+密码登录', 'success');
     })
@@ -1682,6 +2150,60 @@ function escHtml(s) {
 }
 
 // ─── Select All ───────────────────────────────────────────────────────
+function toggleSelect(idx) {
+  if (selectedFiles.has(idx)) selectedFiles.delete(idx);
+  else selectedFiles.add(idx);
+  renderFileList();
+}
+
+function selectAll() {
+  allFiles.forEach((_, i) => selectedFiles.add(i));
+  renderFileList();
+}
+
+function selectNone() {
+  selectedFiles.clear();
+  renderFileList();
+}
+
+function updateSelectedCount() {
+  document.getElementById('selectedCount').textContent = selectedFiles.size;
+  const dlBtn = document.getElementById('downloadBtn');
+  dlBtn.disabled = selectedFiles.size === 0;
+  dlBtn.textContent = selectedFiles.size > 0
+    ? `打包下载 (${selectedFiles.size})`
+    : '打包下载';
+}
+
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  if (!allFiles.length) { list.innerHTML = ''; updateSelectedCount(); return; }
+
+  list.innerHTML = allFiles.map((f, i) => {
+    const checked = selectedFiles.has(i);
+    const extStyle = getExtStyle(f.ext);
+    return `
+    <li class="file-item ${checked ? 'selected' : ''}">
+      <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleSelect(${i})">
+      <div class="file-ext ${extStyle}">${f.ext || '?'}</div>
+      <div class="file-info">
+        <div class="file-name" title="${escHtml(f.name)}">${escHtml(f.name)}</div>
+        <div class="file-meta">格式: ${f.ext.toUpperCase() || '未知'} &nbsp;&middot;&nbsp; 大小: ${f.size}</div>
+      </div>
+      <div class="file-actions">
+        <button class="btn-sm" onclick="downloadSingle(${i})">下载</button>
+      </div>
+    </li>`;
+  }).join('');
+  updateSelectedCount();
+}
+
+function escHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
 function toggleSelectAll() {
   selectAllOn = !selectAllOn;
   document.querySelectorAll('.doc-item input[type="checkbox"]').forEach(cb => cb.checked = selectAllOn);
