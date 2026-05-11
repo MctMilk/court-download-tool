@@ -315,15 +315,12 @@ router.post('/notify', express.text({ type: '*/*' }), async (req, res) => {
 
       if (!hasMonthly && (totalReg >= 10 || totalPaid >= 5)) {
         await _applyInviteRewardAsync(inviter, 'monthly', 1, '月度邀请奖励（+1个月）');
-        return;
       }
       if (!hasMonthly2 && (totalReg >= 20 || totalPaid >= 10)) {
         await _applyInviteRewardAsync(inviter, 'monthly2', 1, '第2个月度邀请奖励（+1个月）');
-        return;
       }
       if (!hasYearly && totalPaid >= 30) {
         await _applyInviteRewardAsync(inviter, 'yearly', 10, '年度邀请奖励（+10个月）');
-        return;
       }
       const hasLifetime = !!(await getAsync('SELECT id FROM invite_rewards WHERE user_id=? AND reward_type=?', [inviterRel.inviter_id, 'lifetime']));
       if (!hasLifetime && totalPaid >= 100) {

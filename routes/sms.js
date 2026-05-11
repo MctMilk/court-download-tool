@@ -5,9 +5,17 @@ const { get, run } = require('../db');
 const router = express.Router();
 
 // ─── 飞鸽短信配置 ─────────────────────────────────────────────
-const FEIGE_APP_KEY = process.env.FEIGE_APP_KEY || 'N746855101';
-const FEIGE_APP_SECRET = process.env.FEIGE_APP_SECRET || '746855212622b138';
-const FEIGE_SIGN_ID = parseInt(process.env.FEIGE_SIGN_ID || '20178');
+if (!process.env.FEIGE_APP_KEY || !process.env.FEIGE_APP_SECRET) {
+  console.error('══════════════════════════════════════════════════');
+  console.error('【严重】FEIGE_APP_KEY 或 FEIGE_APP_SECRET 环境变量未设置！');
+  console.error('短信功能不可用。请设置：');
+  console.error('  export FEIGE_APP_KEY=<你的AppKey>');
+  console.error('  export FEIGE_APP_SECRET=<你的AppSecret>');
+  console.error('══════════════════════════════════════════════════');
+}
+const FEIGE_APP_KEY    = process.env.FEIGE_APP_KEY    || '';
+const FEIGE_APP_SECRET = process.env.FEIGE_APP_SECRET || '';
+const FEIGE_SIGN_ID    = parseInt(process.env.FEIGE_SIGN_ID    || '20178');
 const FEIGE_TEMPLATE_ID = parseInt(process.env.FEIGE_TEMPLATE_ID || '2036262');
 const FEIGE_API_URL = 'https://api.feige.cn/sendsms/template/send';
 
@@ -150,6 +158,11 @@ router.post('/send-code', async (req, res) => {
   logSms(phone, cleanIp, code);
   // 记录指纹，用于后续检测同IP多设备刷验证码
   if (deviceFingerprint) logIpFingerprint(cleanIp, deviceFingerprint);
+
+  // 未配置飞鸽密钥，拒绝发送
+  if (!FEIGE_APP_KEY || !FEIGE_APP_SECRET) {
+    return res.status(500).json({ success: false, error: '短信服务未配置，请联系管理员' });
+  }
 
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const nonce = crypto.randomBytes(16).toString('hex');

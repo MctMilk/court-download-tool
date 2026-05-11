@@ -169,6 +169,16 @@ for (const path of ['/api/download', '/wenshu/api/download']) {
   const { url, filename } = req.query;
   if (!url) return res.status(400).json({ error: '缺少 url' });
 
+  // Fix 5: URL 白名单 — 仅允许阿里云 OSS-CN 域名
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.endsWith('.oss-cn-aliyuncs.com')) {
+      return res.status(403).json({ error: '不允许从该域名下载' });
+    }
+  } catch {
+    return res.status(400).json({ error: '无效的 URL' });
+  }
+
   logUsage(req.user?.userId || null, req.ip, 'single_download');
 
   fetch(url)
@@ -191,6 +201,19 @@ for (const path of ['/api/batch-download', '/wenshu/api/batch-download']) {
   app.post(path, authenticate, requirePaid, async (req, res) => {
   const { files } = req.body;
   if (!files || !files.length) return res.status(400).json({ error: '缺少文件列表' });
+
+  // Fix 5: URL 白名单 — 仅允许阿里云 OSS-CN 域名
+  for (const file of files) {
+    if (!file.url) continue;
+    try {
+      const parsed = new URL(file.url);
+      if (!parsed.hostname.endsWith('.oss-cn-aliyuncs.com')) {
+        return res.status(403).json({ error: `不允许从该域名下载: ${parsed.hostname}` });
+      }
+    } catch {
+      return res.status(400).json({ error: '包含无效的 URL' });
+    }
+  }
 
   logUsage(req.user.userId, req.ip, 'batch_download', files.length);
 

@@ -275,6 +275,11 @@
 </style>
 </head>
 <body>
+<!-- 安全警告 -->
+<div id="securityBanner" style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#856404;display:none">
+  <strong>⚠️ 安全提醒：</strong>管理员密钥当前存储于浏览器 localStorage，存在 XSS 被窃取风险。
+  请定期更换密钥（更换后原密钥立即失效），生产环境建议升级为 httpOnly Cookie 认证。
+</div>
 <div class="container" id="app"></div>
 <div class="toast" id="toast"></div>
 
@@ -769,6 +774,7 @@ function render() {
     renderLogin();
   } else {
     renderDashboard();
+    document.getElementById('securityBanner').style.display = 'block';
   }
 }
 
@@ -781,6 +787,7 @@ function renderLogin() {
       <div class="login-error" id="loginError"></div>
     </div>
   `;
+  document.getElementById('securityBanner').style.display = 'none';
   $('#keyInput').focus();
   $('#keyInput').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 }

@@ -1,7 +1,15 @@
 const jwt = require('jsonwebtoken');
 const { get: dbGet, run: dbRun } = require('../db');
 
-const SECRET = process.env.JWT_SECRET || 'court-tool-jwt-secret-change-in-production';
+if (!process.env.JWT_SECRET) {
+  console.error('══════════════════════════════════════════════════');
+  console.error('【严重】JWT_SECRET 环境变量未设置！');
+  console.error('未授权用户可伪造任意身份访问所有 API！');
+  console.error('请立即设置环境变量：export JWT_SECRET=<随机密钥>');
+  console.error('══════════════════════════════════════════════════');
+  process.exit(1);
+}
+const SECRET = process.env.JWT_SECRET;
 const EXPIRES_IN = '7d';
 const INACTIVITY_MS = 90 * 60 * 1000; // 90分钟无操作过期
 

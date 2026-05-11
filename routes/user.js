@@ -2,9 +2,13 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { get, run, all, getAsync, runAsync, allAsync } = require('../db');
 const { authenticate, isPaidUser } = require('../middleware/auth');
+const { adminAuth } = require('../middleware/adminAuth');
 const wxpay = require('../utils/wxpay');
 
 const router = express.Router();
+
+// ─── 所有管理员路由统一鉴权 ──────────────────────────────────────
+router.use('/admin', adminAuth);
 
 const DEFAULT_PASSWORD = 'SmartLaw0601';
 
